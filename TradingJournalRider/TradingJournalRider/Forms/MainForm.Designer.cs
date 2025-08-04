@@ -80,10 +80,22 @@ namespace TradingJournalGPT.Forms
             this.optionsMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.helpMenu = new System.Windows.Forms.ToolStripMenuItem();
             this.aboutMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.tabControl = new System.Windows.Forms.TabControl();
+            this.tabPageTrades = new System.Windows.Forms.TabPage();
+            this.tabPageSetups = new System.Windows.Forms.TabPage();
+            this.tabPageTechnicals = new System.Windows.Forms.TabPage();
+            this.dataGridViewSetups = new System.Windows.Forms.DataGridView();
+            this.dataGridViewTechnicals = new System.Windows.Forms.DataGridView();
+            this.btnSaveChanges = new System.Windows.Forms.Button();
+            this.lblUnsavedChanges = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)(this.dataGridViewTrades)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.dataGridViewSetups)).BeginInit();
             this.panelTop.SuspendLayout();
             this.panelBottom.SuspendLayout();
             this.panelMain.SuspendLayout();
+            this.tabControl.SuspendLayout();
+            this.tabPageTrades.SuspendLayout();
+            this.tabPageSetups.SuspendLayout();
             this.menuStrip.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -287,6 +299,121 @@ namespace TradingJournalGPT.Forms
             this.aboutMenuItem.Text = "&About";
             this.aboutMenuItem.Click += new System.EventHandler(this.aboutMenuItem_Click);
             // 
+            // tabControl
+            // 
+            this.tabControl.Controls.Add(this.tabPageTrades);
+            this.tabControl.Controls.Add(this.tabPageSetups);
+            this.tabControl.Controls.Add(this.tabPageTechnicals);
+            this.tabControl.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.tabControl.Location = new System.Drawing.Point(0, 0);
+            this.tabControl.Name = "tabControl";
+            this.tabControl.SelectedIndex = 0;
+            this.tabControl.Size = new System.Drawing.Size(1200, 405);
+            this.tabControl.TabIndex = 9;
+            // 
+            // tabPageTrades
+            // 
+            this.tabPageTrades.Controls.Add(this.dataGridViewTrades);
+            this.tabPageTrades.Location = new System.Drawing.Point(4, 24);
+            this.tabPageTrades.Name = "tabPageTrades";
+            this.tabPageTrades.Padding = new System.Windows.Forms.Padding(3);
+            this.tabPageTrades.Size = new System.Drawing.Size(1192, 427);
+            this.tabPageTrades.TabIndex = 0;
+            this.tabPageTrades.Text = "Trades";
+            this.tabPageTrades.UseVisualStyleBackColor = true;
+            // 
+            // tabPageSetups
+            // 
+            this.tabPageSetups.Controls.Add(this.dataGridViewSetups);
+            this.tabPageSetups.Location = new System.Drawing.Point(4, 24);
+            this.tabPageSetups.Name = "tabPageSetups";
+            this.tabPageSetups.Padding = new System.Windows.Forms.Padding(3);
+            this.tabPageSetups.Size = new System.Drawing.Size(1192, 427);
+            this.tabPageSetups.TabIndex = 1;
+            this.tabPageSetups.Text = "Setups";
+            this.tabPageSetups.UseVisualStyleBackColor = true;
+            // 
+            // tabPageTechnicals
+            // 
+            this.tabPageTechnicals.Controls.Add(this.dataGridViewTechnicals);
+            this.tabPageTechnicals.Location = new System.Drawing.Point(4, 24);
+            this.tabPageTechnicals.Name = "tabPageTechnicals";
+            this.tabPageTechnicals.Padding = new System.Windows.Forms.Padding(3);
+            this.tabPageTechnicals.Size = new System.Drawing.Size(1192, 427);
+            this.tabPageTechnicals.TabIndex = 2;
+            this.tabPageTechnicals.Text = "Technicals";
+            this.tabPageTechnicals.UseVisualStyleBackColor = true;
+            // 
+            // dataGridViewSetups
+            // 
+            this.dataGridViewSetups.AllowUserToAddRows = false;
+            this.dataGridViewSetups.AllowUserToDeleteRows = false;
+            this.dataGridViewSetups.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.dataGridViewSetups.AutoSizeColumnsMode = System.Windows.Forms.DataGridViewAutoSizeColumnsMode.None;
+            this.dataGridViewSetups.BackgroundColor = System.Drawing.Color.White;
+            this.dataGridViewSetups.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
+            this.dataGridViewSetups.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            this.dataGridViewSetups.Location = new System.Drawing.Point(12, 12);
+            this.dataGridViewSetups.MultiSelect = false;
+            this.dataGridViewSetups.Name = "dataGridViewSetups";
+            this.dataGridViewSetups.ReadOnly = true;
+            this.dataGridViewSetups.RowHeadersVisible = false;
+            this.dataGridViewSetups.RowTemplate.Height = 25;
+            this.dataGridViewSetups.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect;
+            this.dataGridViewSetups.Size = new System.Drawing.Size(1174, 410);
+            this.dataGridViewSetups.TabIndex = 0;
+            // 
+            // dataGridViewTechnicals
+            // 
+            this.dataGridViewTechnicals.AllowUserToAddRows = false;
+            this.dataGridViewTechnicals.AllowUserToDeleteRows = false;
+            this.dataGridViewTechnicals.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.dataGridViewTechnicals.AutoSizeColumnsMode = System.Windows.Forms.DataGridViewAutoSizeColumnsMode.None;
+            this.dataGridViewTechnicals.BackgroundColor = System.Drawing.Color.White;
+            this.dataGridViewTechnicals.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
+            this.dataGridViewTechnicals.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            this.dataGridViewTechnicals.Location = new System.Drawing.Point(12, 12);
+            this.dataGridViewTechnicals.MultiSelect = false;
+            this.dataGridViewTechnicals.Name = "dataGridViewTechnicals";
+            this.dataGridViewTechnicals.ReadOnly = true;
+            this.dataGridViewTechnicals.RowHeadersVisible = false;
+            this.dataGridViewTechnicals.RowTemplate.Height = 25;
+            this.dataGridViewTechnicals.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect;
+            this.dataGridViewTechnicals.Size = new System.Drawing.Size(1174, 410);
+            this.dataGridViewTechnicals.TabIndex = 0;
+            // 
+            // btnSaveChanges
+            // 
+            this.btnSaveChanges.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
+            this.btnSaveChanges.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(40)))), ((int)(((byte)(167)))), ((int)(((byte)(69)))));
+            this.btnSaveChanges.FlatAppearance.BorderSize = 0;
+            this.btnSaveChanges.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnSaveChanges.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.btnSaveChanges.ForeColor = System.Drawing.Color.White;
+            this.btnSaveChanges.Location = new System.Drawing.Point(525, 12);
+            this.btnSaveChanges.Name = "btnSaveChanges";
+            this.btnSaveChanges.Size = new System.Drawing.Size(100, 30);
+            this.btnSaveChanges.TabIndex = 10;
+            this.btnSaveChanges.Text = "Save Changes";
+            this.btnSaveChanges.UseVisualStyleBackColor = false;
+            this.btnSaveChanges.Visible = false;
+            // 
+            // lblUnsavedChanges
+            // 
+            this.lblUnsavedChanges.AutoSize = true;
+            this.lblUnsavedChanges.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.lblUnsavedChanges.ForeColor = System.Drawing.Color.Orange;
+            this.lblUnsavedChanges.Location = new System.Drawing.Point(800, 18);
+            this.lblUnsavedChanges.Name = "lblUnsavedChanges";
+            this.lblUnsavedChanges.Size = new System.Drawing.Size(120, 15);
+            this.lblUnsavedChanges.TabIndex = 11;
+            this.lblUnsavedChanges.Text = "▲ Unsaved Changes";
+            this.lblUnsavedChanges.Visible = false;
+            // 
             // dataGridViewTrades
             // 
             this.dataGridViewTrades.AllowUserToAddRows = false;
@@ -305,9 +432,8 @@ namespace TradingJournalGPT.Forms
             this.dataGridViewTrades.RowHeadersVisible = false;
             this.dataGridViewTrades.RowTemplate.Height = 25;
             this.dataGridViewTrades.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect;
-            this.dataGridViewTrades.Size = new System.Drawing.Size(1200, 397);
+            this.dataGridViewTrades.Size = new System.Drawing.Size(1174, 410);
             this.dataGridViewTrades.TabIndex = 0;
-            this.dataGridViewTrades.CellClick += new System.Windows.Forms.DataGridViewCellEventHandler(this.dataGridViewTrades_CellClick);
             // 
             // btnAnalyzeChartImage
             // 
@@ -349,7 +475,7 @@ namespace TradingJournalGPT.Forms
             this.btnRefresh.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnRefresh.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
             this.btnRefresh.ForeColor = System.Drawing.Color.White;
-            this.btnRefresh.Location = new System.Drawing.Point(638, 12);
+            this.btnRefresh.Location = new System.Drawing.Point(1038, 12);
             this.btnRefresh.Name = "btnRefresh";
             this.btnRefresh.Size = new System.Drawing.Size(150, 40);
             this.btnRefresh.TabIndex = 3;
@@ -385,7 +511,7 @@ namespace TradingJournalGPT.Forms
             this.panelTop.Dock = System.Windows.Forms.DockStyle.Top;
             this.panelTop.Location = new System.Drawing.Point(0, 24);
             this.panelTop.Name = "panelTop";
-            this.panelTop.Size = new System.Drawing.Size(800, 0);
+            this.panelTop.Size = new System.Drawing.Size(1200, 10);
             this.panelTop.TabIndex = 6;
             // 
             // panelBottom
@@ -396,19 +522,21 @@ namespace TradingJournalGPT.Forms
             this.panelBottom.Controls.Add(this.btnAnalyzeChartImage);
             this.panelBottom.Controls.Add(this.btnAnalyzeChartFolder);
             this.panelBottom.Controls.Add(this.btnRefresh);
+            this.panelBottom.Controls.Add(this.btnSaveChanges);
+            this.panelBottom.Controls.Add(this.lblUnsavedChanges);
             this.panelBottom.Dock = System.Windows.Forms.DockStyle.Bottom;
             this.panelBottom.Location = new System.Drawing.Point(0, 479);
             this.panelBottom.Name = "panelBottom";
-            this.panelBottom.Size = new System.Drawing.Size(800, 100);
+            this.panelBottom.Size = new System.Drawing.Size(1200, 100);
             this.panelBottom.TabIndex = 7;
             // 
             // panelMain
             // 
-            this.panelMain.Controls.Add(this.dataGridViewTrades);
+            this.panelMain.Controls.Add(this.tabControl);
             this.panelMain.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.panelMain.Location = new System.Drawing.Point(0, 24);
+            this.panelMain.Location = new System.Drawing.Point(0, 34);
             this.panelMain.Name = "panelMain";
-            this.panelMain.Size = new System.Drawing.Size(800, 455);
+            this.panelMain.Size = new System.Drawing.Size(1200, 445);
             this.panelMain.TabIndex = 8;
             // 
             // MainForm
@@ -427,10 +555,15 @@ namespace TradingJournalGPT.Forms
             this.Text = "Trading Journal";
             this.Load += new System.EventHandler(this.MainForm_Load);
             ((System.ComponentModel.ISupportInitialize)(this.dataGridViewTrades)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.dataGridViewSetups)).EndInit();
             this.panelTop.ResumeLayout(false);
             this.panelTop.PerformLayout();
             this.panelBottom.ResumeLayout(false);
             this.panelMain.ResumeLayout(false);
+            this.tabControl.ResumeLayout(false);
+            this.tabPageTrades.ResumeLayout(false);
+            this.tabPageSetups.ResumeLayout(false);
+            this.tabPageTechnicals.ResumeLayout(false);
             this.menuStrip.ResumeLayout(false);
             this.menuStrip.PerformLayout();
             this.ResumeLayout(false);
@@ -477,5 +610,13 @@ namespace TradingJournalGPT.Forms
         private System.Windows.Forms.ToolStripMenuItem optionsMenuItem;
         private System.Windows.Forms.ToolStripMenuItem helpMenu;
         private System.Windows.Forms.ToolStripMenuItem aboutMenuItem;
+        private System.Windows.Forms.TabControl tabControl;
+        private System.Windows.Forms.TabPage tabPageTrades;
+        private System.Windows.Forms.TabPage tabPageSetups;
+        private System.Windows.Forms.TabPage tabPageTechnicals;
+        private System.Windows.Forms.DataGridView dataGridViewSetups;
+        private System.Windows.Forms.DataGridView dataGridViewTechnicals;
+        private System.Windows.Forms.Button btnSaveChanges;
+        private System.Windows.Forms.Label lblUnsavedChanges;
     }
 } 

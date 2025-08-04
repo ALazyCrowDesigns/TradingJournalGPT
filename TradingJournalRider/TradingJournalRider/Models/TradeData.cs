@@ -27,5 +27,9 @@ namespace TradingJournalGPT.Models
         public int TradeSeq { get; set; } = 0; // Trade sequence number for the same symbol/date
         public string Notes { get; set; } = string.Empty;
         public string ScreenshotPath { get; set; } = string.Empty;
+        public string Setup { get; set; } = string.Empty; // Link to setup from setups page
+        public decimal Float { get; set; } = 0; // Float value for the symbol
+        public string Catalyst { get; set; } = string.Empty; // Catalyst information
+        public string Technicals { get; set; } = string.Empty; // Technical analysis information
     }
 } 

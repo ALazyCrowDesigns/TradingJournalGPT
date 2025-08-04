@@ -12,6 +12,7 @@
     <PackageReference Include="Google.Apis.Sheets.v4" Version="1.68.0.3393" />
     <PackageReference Include="Google.Apis.Auth" Version="1.68.0" />
     <PackageReference Include="System.Text.Json" Version="6.0.0" />
+    <PackageReference Include="EPPlus" Version="6.2.10" />
   </ItemGroup>
 
 </Project>

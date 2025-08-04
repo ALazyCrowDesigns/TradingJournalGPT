@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using TradingJournalGPT.Models;
 using TradingJournalGPT.Services;
+using OfficeOpenXml;
 
 namespace TradingJournalGPT.Forms
 {
@@ -17,9 +18,14 @@ namespace TradingJournalGPT.Forms
     {
         private readonly TradingJournalService _tradingJournalService;
         private readonly LocalStorageService _localStorageService;
+        private readonly FloatDataService _floatDataService;
         private DataTable _tradesDataTable = new DataTable();
+        private DataTable _setupsDataTable = new DataTable();
+        private DataTable _technicalsDataTable = new DataTable();
         private bool _isProcessing = false;
         private ContextMenuStrip _contextMenu = null!;
+        private ContextMenuStrip _setupsContextMenu = null!;
+        private ContextMenuStrip _technicalsContextMenu = null!;
         
         // Enhanced Undo/Redo system with temporary state
         private readonly Stack<UndoRedoAction> _undoStack = new Stack<UndoRedoAction>();
@@ -29,15 +35,18 @@ namespace TradingJournalGPT.Forms
         // Temporary state management
         private List<TradeData> _temporaryTrades = new List<TradeData>();
         private List<TradeData> _deletedTrades = new List<TradeData>(); // Track deleted trades for image cleanup
+        private List<Dictionary<string, object>> _temporarySetups = new List<Dictionary<string, object>>();
+        private List<Dictionary<string, object>> _deletedSetups = new List<Dictionary<string, object>>(); // Track deleted setups
+        private List<Dictionary<string, object>> _temporaryTechnicals = new List<Dictionary<string, object>>();
+        private List<Dictionary<string, object>> _deletedTechnicals = new List<Dictionary<string, object>>(); // Track deleted technicals
         private bool _hasUnsavedChanges = false;
-        private Button _btnSaveChanges = null!;
-        private Label _lblUnsavedChanges = null!;
 
         public MainForm()
         {
             InitializeComponent();
             _tradingJournalService = new TradingJournalService();
             _localStorageService = new LocalStorageService();
+            _floatDataService = new FloatDataService();
             InitializeDataTable();
             InitializeTemporaryState();
             
@@ -48,7 +57,9 @@ namespace TradingJournalGPT.Forms
             _ = Task.Run(async () => 
             {
                 await Task.Delay(200); // Increased delay to ensure UI is fully ready
+                await _floatDataService.InitializeAsync(); // Initialize float data service
                 this.Invoke(() => LoadRecentTrades());
+                await LoadSetupsData(); // Load setups data on startup
             });
         }
 
@@ -64,6 +75,10 @@ namespace TradingJournalGPT.Forms
             _tradesDataTable.Columns.Add("Gap % (Close to High)", typeof(decimal));
             _tradesDataTable.Columns.Add("Gap % (High to Low)", typeof(decimal));
             _tradesDataTable.Columns.Add("Volume (M)", typeof(decimal));
+            _tradesDataTable.Columns.Add("Strategy", typeof(string));
+            _tradesDataTable.Columns.Add("Float", typeof(decimal));
+            _tradesDataTable.Columns.Add("Catalyst", typeof(string));
+            _tradesDataTable.Columns.Add("Technicals", typeof(string));
             _tradesDataTable.Columns.Add("Chart", typeof(string));
 
             dataGridViewTrades.DataSource = _tradesDataTable;
@@ -77,6 +92,7 @@ namespace TradingJournalGPT.Forms
             dataGridViewTrades.Columns["Symbol"].ReadOnly = true;
             dataGridViewTrades.Columns["Date"].ReadOnly = true;
             dataGridViewTrades.Columns["Trade Seq"].ReadOnly = true;
+            dataGridViewTrades.Columns["Float"].ReadOnly = true; // Float is read-only (from CSV data)
             dataGridViewTrades.Columns["Chart"].ReadOnly = true;
             
             // Configure Chart column for image display
@@ -84,17 +100,372 @@ namespace TradingJournalGPT.Forms
             chartColumn.Width = 100;
             chartColumn.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
             
+            // Configure Strategy column
+            var strategyColumn = dataGridViewTrades.Columns["Strategy"];
+            strategyColumn.Width = 150;
+            
+            // Configure Float column
+            var floatColumn = dataGridViewTrades.Columns["Float"];
+            floatColumn.Width = 80;
+            floatColumn.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+            
+            // Configure Catalyst column
+            var catalystColumn = dataGridViewTrades.Columns["Catalyst"];
+            catalystColumn.Width = 150;
+            
+            // Configure Technicals column
+            var technicalsColumn = dataGridViewTrades.Columns["Technicals"];
+            technicalsColumn.Width = 150;
+            
             // Add event handlers
             dataGridViewTrades.CellEndEdit += DataGridViewTrades_CellEndEdit;
             dataGridViewTrades.KeyDown += DataGridViewTrades_KeyDown;
-            dataGridViewTrades.MouseClick += DataGridViewTrades_MouseClick;
             dataGridViewTrades.CellFormatting += DataGridViewTrades_CellFormatting;
             dataGridViewTrades.DataError += DataGridViewTrades_DataError;
+            dataGridViewTrades.CellClick += dataGridViewTrades_CellClick;
+            dataGridViewTrades.MouseClick += DataGridViewTrades_MouseClick;
             
             // Create context menu for delete functionality
             CreateContextMenu();
+
+            // Initialize Setups DataTable
+            InitializeSetupsDataTable();
+            
+            // Initialize Technicals DataTable
+            InitializeTechnicalsDataTable();
         }
 
+        private void InitializeSetupsDataTable()
+        {
+            _setupsDataTable = new DataTable();
+            _setupsDataTable.Columns.Add("Strategy", typeof(string));
+            _setupsDataTable.Columns.Add("Direction", typeof(string));
+            _setupsDataTable.Columns.Add("Cycle", typeof(string));
+            _setupsDataTable.Columns.Add("Meta Grade", typeof(string));
+            _setupsDataTable.Columns.Add("Description", typeof(string));
+            _setupsDataTable.Columns.Add("Pre-req", typeof(string));
+            _setupsDataTable.Columns.Add("Ruin Variables", typeof(string));
+            _setupsDataTable.Columns.Add("Entry (s)", typeof(string));
+            _setupsDataTable.Columns.Add("Exit 1", typeof(string));
+            _setupsDataTable.Columns.Add("Exit 2", typeof(string));
+            _setupsDataTable.Columns.Add("Exit 3", typeof(string));
+            _setupsDataTable.Columns.Add("Stop", typeof(string));
+            _setupsDataTable.Columns.Add("Examples", typeof(string));
+
+            dataGridViewSetups.DataSource = _setupsDataTable;
+            dataGridViewSetups.AutoResizeColumns(DataGridViewAutoSizeColumnsMode.AllCells);
+            dataGridViewSetups.AllowUserToAddRows = true;
+            dataGridViewSetups.ReadOnly = false;
+            dataGridViewSetups.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            dataGridViewSetups.MultiSelect = false;
+            
+            // Add event handlers for setups
+            dataGridViewSetups.CellEndEdit += DataGridViewSetups_CellEndEdit;
+            dataGridViewSetups.KeyDown += DataGridViewSetups_KeyDown;
+            dataGridViewSetups.DataError += DataGridViewSetups_DataError;
+            dataGridViewSetups.MouseClick += DataGridViewSetups_MouseClick;
+
+            // Create context menu for setups
+            CreateSetupsContextMenu();
+
+            // Load sample setups data
+            LoadSampleSetupsData();
+        }
+
+        private void InitializeTechnicalsDataTable()
+        {
+            _technicalsDataTable = new DataTable();
+            _technicalsDataTable.Columns.Add("Type", typeof(string));
+            _technicalsDataTable.Columns.Add("Description", typeof(string));
+            _technicalsDataTable.Columns.Add("Examples", typeof(string));
+
+            dataGridViewTechnicals.DataSource = _technicalsDataTable;
+            dataGridViewTechnicals.AutoResizeColumns(DataGridViewAutoSizeColumnsMode.AllCells);
+            dataGridViewTechnicals.AllowUserToAddRows = true;
+            dataGridViewTechnicals.ReadOnly = false;
+            dataGridViewTechnicals.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            dataGridViewTechnicals.MultiSelect = false;
+            
+            // Add event handlers for technicals
+            dataGridViewTechnicals.CellEndEdit += DataGridViewTechnicals_CellEndEdit;
+            dataGridViewTechnicals.KeyDown += DataGridViewTechnicals_KeyDown;
+            dataGridViewTechnicals.DataError += DataGridViewTechnicals_DataError;
+            dataGridViewTechnicals.MouseClick += DataGridViewTechnicals_MouseClick;
+
+            // Create context menu for technicals
+            CreateTechnicalsContextMenu();
+
+            // Load sample technicals data
+            LoadSampleTechnicalsData();
+        }
+
+        private void LoadSampleSetupsData()
+        {
+            Console.WriteLine("LoadSampleSetupsData called");
+            
+            // Add sample setups data to temporary state
+            var sampleSetups = new[]
+            {
+                new Dictionary<string, object> { 
+                    ["Strategy"] = "Gap and Go", 
+                    ["Direction"] = "Long", 
+                    ["Cycle"] = "Daily", 
+                    ["Meta Grade"] = "A", 
+                    ["Description"] = "Stock gaps up with high volume and continues higher", 
+                    ["Pre-req"] = "High volume gap up", 
+                    ["Ruin Variables"] = "Low volume, gap down", 
+                    ["Entry (s)"] = "Break of first 5min high", 
+                    ["Exit 1"] = "2R target", 
+                    ["Exit 2"] = "3R target", 
+                    ["Exit 3"] = "5R target", 
+                    ["Stop"] = "Below gap fill", 
+                    ["Examples"] = "TSLA, NVDA" 
+                },
+                new Dictionary<string, object> { 
+                    ["Strategy"] = "Breakout", 
+                    ["Direction"] = "Long/Short", 
+                    ["Cycle"] = "Daily", 
+                    ["Meta Grade"] = "B", 
+                    ["Description"] = "Breakout from consolidation with volume", 
+                    ["Pre-req"] = "Consolidation pattern", 
+                    ["Ruin Variables"] = "False breakout", 
+                    ["Entry (s)"] = "Break of resistance/support", 
+                    ["Exit 1"] = "1.5R target", 
+                    ["Exit 2"] = "2.5R target", 
+                    ["Exit 3"] = "4R target", 
+                    ["Stop"] = "Below/above breakout level", 
+                    ["Examples"] = "AAPL, MSFT" 
+                }
+            };
+            
+            _temporarySetups = new List<Dictionary<string, object>>(sampleSetups);
+            Console.WriteLine($"Loaded {_temporarySetups.Count} sample setups");
+            
+            // Refresh the display
+            RefreshSetupsDisplay();
+            
+            Console.WriteLine("LoadSampleSetupsData completed");
+        }
+
+        private void LoadSampleTechnicalsData()
+        {
+            Console.WriteLine("LoadSampleTechnicalsData called");
+            
+            // Add sample technicals data to temporary state
+            _temporaryTechnicals.Add(new Dictionary<string, object>
+            {
+                ["Type"] = "Breakout",
+                ["Description"] = "Price breaks above resistance level with increased volume",
+                ["Examples"] = "AAPL, TSLA, NVDA"
+            });
+            
+            _temporaryTechnicals.Add(new Dictionary<string, object>
+            {
+                ["Type"] = "Gap Up",
+                ["Description"] = "Price opens significantly higher than previous close",
+                ["Examples"] = "MRNA, ZM, PTON"
+            });
+            
+            _temporaryTechnicals.Add(new Dictionary<string, object>
+            {
+                ["Type"] = "Volume Spike",
+                ["Description"] = "Unusual high volume compared to average daily volume",
+                ["Examples"] = "GME, AMC, BB"
+            });
+            
+            _temporaryTechnicals.Add(new Dictionary<string, object>
+            {
+                ["Type"] = "RSI Divergence",
+                ["Description"] = "Price makes new highs while RSI makes lower highs",
+                ["Examples"] = "SPY, QQQ, IWM"
+            });
+            
+            _temporaryTechnicals.Add(new Dictionary<string, object>
+            {
+                ["Type"] = "Moving Average Crossover",
+                ["Description"] = "Short-term MA crosses above long-term MA",
+                ["Examples"] = "MSFT, GOOGL, AMZN"
+            });
+            
+            // Refresh the display
+            RefreshTechnicalsDisplay();
+            
+            Console.WriteLine("LoadSampleTechnicalsData completed");
+        }
+
+        private async Task SaveSetupsData()
+        {
+            try
+            {
+                // Create the setups file path
+                var appDirectory = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? AppDomain.CurrentDomain.BaseDirectory;
+                var dataDirectory = Path.Combine(appDirectory, "Data");
+                var setupsFile = Path.Combine(dataDirectory, "setups.json");
+                
+                // Ensure directory exists
+                if (!Directory.Exists(dataDirectory))
+                {
+                    Directory.CreateDirectory(dataDirectory);
+                }
+
+                // Save temporary setups to file
+                var options = new System.Text.Json.JsonSerializerOptions
+                {
+                    WriteIndented = true
+                };
+                var json = System.Text.Json.JsonSerializer.Serialize(_temporarySetups, options);
+                await File.WriteAllTextAsync(setupsFile, json);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error saving setups data: {ex.Message}");
+            }
+        }
+
+        private async Task LoadSetupsData()
+        {
+            try
+            {
+                Console.WriteLine("LoadSetupsData called");
+                
+                // Create the setups file path
+                var appDirectory = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? AppDomain.CurrentDomain.BaseDirectory;
+                var dataDirectory = Path.Combine(appDirectory, "Data");
+                var setupsFile = Path.Combine(dataDirectory, "setups.json");
+                
+                Console.WriteLine($"Looking for setups file at: {setupsFile}");
+                
+                if (File.Exists(setupsFile))
+                {
+                    Console.WriteLine("Setups file found, loading data...");
+                    var json = await File.ReadAllTextAsync(setupsFile);
+                    if (!string.IsNullOrEmpty(json))
+                    {
+                        var options = new System.Text.Json.JsonSerializerOptions
+                        {
+                            PropertyNameCaseInsensitive = true
+                        };
+                        
+                        var setupsData = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, object>>>(json, options);
+                        
+                        if (setupsData != null && setupsData.Count() > 0)
+                        {
+                            Console.WriteLine($"Loaded {setupsData.Count()} setups from file");
+                            // Initialize temporary state with loaded data
+                            _temporarySetups = new List<Dictionary<string, object>>(setupsData);
+                            
+                            // Refresh the display
+                            RefreshSetupsDisplay();
+                            
+                            // Refresh the Strategy ComboBox items in the trades grid
+                            // RefreshStrategyComboBoxItems(); // This method is being removed
+                            return; // Successfully loaded data
+                        }
+                    }
+                }
+                
+                Console.WriteLine("No saved setups data found, loading sample data...");
+                // Load sample data if no saved data exists
+                LoadSampleSetupsData();
+                
+                // Refresh the Strategy ComboBox items in the trades grid
+                // RefreshStrategyComboBoxItems(); // This method is being removed
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading setups data: {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                LoadSampleSetupsData();
+            }
+        }
+
+        private async Task SaveTechnicalsData()
+        {
+            try
+            {
+                var technicalsData = _temporaryTechnicals.Select(setup => new Dictionary<string, object>(setup)).ToList();
+                var json = System.Text.Json.JsonSerializer.Serialize(technicalsData, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                
+                var appDirectory = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? AppDomain.CurrentDomain.BaseDirectory;
+                var technicalsFilePath = Path.Combine(appDirectory, "technicals.json");
+                
+                await File.WriteAllTextAsync(technicalsFilePath, json);
+                Console.WriteLine($"Technicals data saved to {technicalsFilePath}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error saving technicals data: {ex.Message}");
+                throw;
+            }
+        }
+
+        private async Task LoadTechnicalsData()
+        {
+            try
+            {
+                var appDirectory = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? AppDomain.CurrentDomain.BaseDirectory;
+                var technicalsFilePath = Path.Combine(appDirectory, "technicals.json");
+                
+                if (File.Exists(technicalsFilePath))
+                {
+                    var json = await File.ReadAllTextAsync(technicalsFilePath);
+                    var technicalsData = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, object>>>(json);
+                    
+                    if (technicalsData != null && technicalsData.Count() > 0)
+                    {
+                        _temporaryTechnicals = technicalsData;
+                        Console.WriteLine($"Loaded {technicalsData.Count} technicals from {technicalsFilePath}");
+                    }
+                    else
+                    {
+                        Console.WriteLine("No technicals data found, using sample data");
+                        LoadSampleTechnicalsData();
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("Technicals file not found, using sample data");
+                    LoadSampleTechnicalsData();
+                }
+                
+                RefreshTechnicalsDisplay();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading technicals data: {ex.Message}");
+                LoadSampleTechnicalsData();
+            }
+        }
+
+        private void RefreshSetupsDisplay()
+        {
+            // Skip refreshing if we're in the middle of an undo/redo operation
+            if (_isUndoRedoAction)
+            {
+                return;
+            }
+
+            _setupsDataTable.Clear();
+            
+            // Add setups from temporary state
+            foreach (var setup in _temporarySetups)
+            {
+                var row = _setupsDataTable.NewRow();
+                foreach (var kvp in setup)
+                {
+                    if (_setupsDataTable.Columns.Contains(kvp.Key))
+                    {
+                        row[kvp.Key] = kvp.Value;
+                    }
+                }
+                _setupsDataTable.Rows.Add(row);
+            }
+            
+            // Refresh the Strategy ComboBox items in the trades grid
+            // RefreshStrategyComboBoxItems(); // This method is being removed
+            Console.WriteLine($"RefreshSetupsDisplay completed - {_temporarySetups.Count} setups displayed");
+        }
+        
         private async void LoadRecentTrades()
         {
             try
@@ -118,6 +489,10 @@ namespace TradingJournalGPT.Forms
                             trade.GapPercentToHigh,
                             trade.GapPercentHighToLow,
                             trade.Volume / 1000000m,
+                            trade.Setup,
+                            trade.Float,
+                            trade.Catalyst,
+                            trade.Technicals,
                             trade.ChartImagePath ?? "No Image"
                         );
                     }
@@ -174,9 +549,16 @@ namespace TradingJournalGPT.Forms
                         trade.GapPercentToHigh,
                         trade.GapPercentHighToLow,
                         trade.Volume / 1000000m,
+                        trade.Setup,
+                        trade.Float,
+                        trade.Catalyst,
+                        trade.Technicals,
                         trade.ChartImagePath ?? "No Image"
                     );
                 }
+                
+                // Refresh the Strategy ComboBox items after loading trades
+                // RefreshStrategyComboBoxItems(); // This method is being removed
             }
             catch (Exception ex)
             {
@@ -261,6 +643,10 @@ namespace TradingJournalGPT.Forms
                 Console.WriteLine("Calling ChatGPT analysis...");
                 var tradeData = await _tradingJournalService.AnalyzeChartImage(imagePath);
                 Console.WriteLine($"ChatGPT analysis completed. Symbol: {tradeData.Symbol}, Date: {tradeData.Date}, TradeSeq: {tradeData.TradeSeq}");
+
+                // Add float data to the trade
+                tradeData.Float = _floatDataService.GetFloat(tradeData.Symbol);
+                Console.WriteLine($"Added float data for {tradeData.Symbol}: {tradeData.Float}");
 
                 // Show results dialog
                 Console.WriteLine("Showing AnalysisResultForm dialog...");
@@ -395,6 +781,10 @@ namespace TradingJournalGPT.Forms
                         trade.GapPercentToHigh,
                         trade.GapPercentHighToLow,
                         trade.Volume / 1000000m,
+                        trade.Setup,
+                        trade.Float,
+                        trade.Catalyst,
+                        trade.Technicals,
                         trade.ChartImagePath ?? "No Image"
                     );
                 }
@@ -438,46 +828,135 @@ namespace TradingJournalGPT.Forms
             dataGridViewTrades.Refresh();
         }
 
+
+
         private void dataGridViewTrades_CellClick(object? sender, DataGridViewCellEventArgs e)
         {
-            if (e.RowIndex >= 0 && e.ColumnIndex == dataGridViewTrades.Columns["Chart"].Index)
+            if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+            
+            var columnName = dataGridViewTrades.Columns[e.ColumnIndex].Name;
+            Console.WriteLine($"CellClick: Column={columnName}, Row={e.RowIndex}");
+            
+            if (columnName == "Chart")
             {
+                var imagePath = dataGridViewTrades.Rows[e.RowIndex].Cells[e.ColumnIndex].Value?.ToString();
+                if (string.IsNullOrEmpty(imagePath) || imagePath == "No Image")
+                {
+                    MessageBox.Show("No chart image available for this trade.", "No Image", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+                
                 try
                 {
-                    // Get the image path directly from the cell
-                    var imagePath = dataGridViewTrades.Rows[e.RowIndex].Cells["Chart"].Value?.ToString();
-                    
-                    if (string.IsNullOrEmpty(imagePath))
-                    {
-                        MessageBox.Show("No chart image available for this trade.", "No Image", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        return;
-                    }
-
-                    // Check if the image file exists
                     if (File.Exists(imagePath))
                     {
-                        try
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                         {
-                            // Open the chart image in the default image viewer
-                            var imageStorageService = new ImageStorageService();
-                            imageStorageService.OpenImageInDefaultViewer(imagePath);
-                        }
-                        catch (Exception ex)
-                        {
-                            MessageBox.Show($"Error opening chart image: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        }
+                            FileName = imagePath,
+                            UseShellExecute = true
+                        });
                     }
                     else
                     {
-                        MessageBox.Show($"Chart image file not found: {imagePath}", "File Not Found", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        MessageBox.Show($"Image file not found: {imagePath}", "File Not Found", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     }
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Error displaying chart: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show($"Error opening image: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
+            else if (columnName == "Strategy")
+            {
+                ShowStrategySelectionDialog(e.RowIndex);
+            }
         }
+
+        private void ShowStrategySelectionDialog(int rowIndex)
+        {
+            try
+            {
+                // Get available strategies from setups
+                var availableStrategies = _temporarySetups
+                    .Select(s => s["Strategy"]?.ToString() ?? "")
+                    .Where(s => !string.IsNullOrEmpty(s))
+                    .ToList();
+
+                if (!availableStrategies.Any())
+                {
+                    MessageBox.Show("No strategies available. Please add some strategies in the Setups tab first.", 
+                        "No Strategies", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                // Create a simple form with ComboBox
+                using var form = new Form
+                {
+                    Text = "Select Strategy",
+                    Size = new Size(300, 150),
+                    StartPosition = FormStartPosition.CenterParent,
+                    FormBorderStyle = FormBorderStyle.FixedDialog,
+                    MaximizeBox = false,
+                    MinimizeBox = false
+                };
+
+                var comboBox = new ComboBox
+                {
+                    Location = new Point(20, 20),
+                    Size = new Size(240, 25),
+                    DropDownStyle = ComboBoxStyle.DropDownList
+                };
+
+                // Add empty option and available strategies
+                comboBox.Items.Add("");
+                comboBox.Items.AddRange(availableStrategies.ToArray());
+
+                // Set current value if any
+                var currentValue = dataGridViewTrades.Rows[rowIndex].Cells["Strategy"].Value?.ToString() ?? "";
+                if (!string.IsNullOrEmpty(currentValue))
+                {
+                    comboBox.SelectedItem = currentValue;
+                }
+                else
+                {
+                    comboBox.SelectedIndex = 0; // Select empty option
+                }
+
+                var button = new Button
+                {
+                    Text = "OK",
+                    Location = new Point(100, 60),
+                    Size = new Size(80, 30),
+                    DialogResult = DialogResult.OK
+                };
+
+                form.Controls.Add(comboBox);
+                form.Controls.Add(button);
+                form.AcceptButton = button;
+
+                // Show dialog
+                if (form.ShowDialog() == DialogResult.OK)
+                {
+                    var selectedStrategy = comboBox.SelectedItem?.ToString() ?? "";
+                    dataGridViewTrades.Rows[rowIndex].Cells["Strategy"].Value = selectedStrategy;
+                    
+                    // Update the trade in temporary storage
+                    UpdateTradeInStorage(rowIndex);
+                    
+                    // Update Examples column in setups to reflect the strategy change
+                    UpdateSetupsExamplesFromTrades();
+                    
+                    SetUnsavedChanges(true);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error showing strategy selection dialog: {ex.Message}", 
+                    "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+
 
         private void MainForm_Load(object? sender, EventArgs e)
         {
@@ -489,6 +968,31 @@ namespace TradingJournalGPT.Forms
             
             // Cleanup orphaned images on startup
             CleanupOrphanedImages();
+            
+            // Display float data information
+            DisplayFloatDataInfo();
+        }
+
+        /// <summary>
+        /// Displays information about the loaded float data
+        /// </summary>
+        private void DisplayFloatDataInfo()
+        {
+            try
+            {
+                var floatInfo = _floatDataService.GetCurrentFileInfo();
+                Console.WriteLine($"Float Data Status: {floatInfo}");
+                
+                // Also show in status label if available
+                if (lblStatus != null)
+                {
+                    lblStatus.Text = $"Ready - {floatInfo}";
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error displaying float data info: {ex.Message}");
+            }
         }
 
         private void DataGridViewTrades_CellEndEdit(object? sender, DataGridViewCellEventArgs e)
@@ -497,7 +1001,10 @@ namespace TradingJournalGPT.Forms
             {
                 if (e.RowIndex >= 0 && e.ColumnIndex >= 0)
                 {
+                    var columnName = dataGridViewTrades.Columns[e.ColumnIndex].Name;
                     var newValue = dataGridViewTrades.Rows[e.RowIndex].Cells[e.ColumnIndex].Value;
+                    
+                    Console.WriteLine($"CellEndEdit triggered: Column={columnName}, Row={e.RowIndex}, Value={newValue}");
                     
                     // Handle empty values - set to 0 for numeric fields
                     if (newValue == null || string.IsNullOrEmpty(newValue.ToString()))
@@ -510,6 +1017,12 @@ namespace TradingJournalGPT.Forms
                     
                     // Update the temporary state with the edited data
                     UpdateTradeInStorage(e.RowIndex);
+                    
+                    // If Strategy column was edited, update Examples in setups
+                    if (columnName == "Strategy")
+                    {
+                        UpdateSetupsExamplesFromTrades();
+                    }
                 }
             }
             catch (Exception ex)
@@ -635,6 +1148,10 @@ namespace TradingJournalGPT.Forms
                         GapPercentToHigh = tradeToUpdate.GapPercentToHigh,
                         GapPercentHighToLow = tradeToUpdate.GapPercentHighToLow,
                         Volume = tradeToUpdate.Volume,
+                        Setup = tradeToUpdate.Setup,
+                        Float = tradeToUpdate.Float,
+                        Catalyst = tradeToUpdate.Catalyst,
+                        Technicals = tradeToUpdate.Technicals,
                         ChartImagePath = tradeToUpdate.ChartImagePath
                     };
 
@@ -656,6 +1173,11 @@ namespace TradingJournalGPT.Forms
                     
                     tradeToUpdate.Volume = Convert.ToInt64((Convert.ToDecimal(dataGridViewTrades.Rows[rowIndex].Cells["Volume (M)"].Value ?? 0m) * 1000000m));
                     
+                    // Update Strategy field
+                    var strategyValue = dataGridViewTrades.Rows[rowIndex].Cells["Strategy"].Value?.ToString() ?? "";
+                    tradeToUpdate.Setup = strategyValue;
+                    Console.WriteLine($"Updated Strategy for trade {tradeToUpdate.Symbol} on {tradeToUpdate.Date:yyyy-MM-dd}: '{strategyValue}'");
+                    
                     // Update Trade Seq if it was changed (though it should be read-only)
                     var currentTradeSeq = Convert.ToInt32(dataGridViewTrades.Rows[rowIndex].Cells["Trade Seq"].Value ?? 0);
                     tradeToUpdate.TradeSeq = currentTradeSeq;
@@ -672,6 +1194,10 @@ namespace TradingJournalGPT.Forms
                         GapPercentToHigh = tradeToUpdate.GapPercentToHigh,
                         GapPercentHighToLow = tradeToUpdate.GapPercentHighToLow,
                         Volume = tradeToUpdate.Volume,
+                        Setup = tradeToUpdate.Setup,
+                        Float = tradeToUpdate.Float,
+                        Catalyst = tradeToUpdate.Catalyst,
+                        Technicals = tradeToUpdate.Technicals,
                         ChartImagePath = tradeToUpdate.ChartImagePath
                     };
 
@@ -758,6 +1284,71 @@ namespace TradingJournalGPT.Forms
             _contextMenu.Items.Add(deleteItem);
         }
 
+        private void CreateSetupsContextMenu()
+        {
+            _setupsContextMenu = new ContextMenuStrip();
+            var deleteItem = new ToolStripMenuItem("Delete Setup");
+            deleteItem.Click += (sender, e) => DeleteSelectedSetupRow();
+            _setupsContextMenu.Items.Add(deleteItem);
+        }
+
+        private void DeleteSelectedSetupRow()
+        {
+            if (dataGridViewSetups.SelectedRows.Count == 0) return;
+
+            var result = MessageBox.Show(
+                "Are you sure you want to delete this setup?",
+                "Confirm Delete",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+
+            if (result == DialogResult.Yes)
+            {
+                try
+                {
+                    var selectedRow = dataGridViewSetups.SelectedRows[0];
+                    var rowIndex = selectedRow.Index;
+                    
+                    // Get the setup data before deletion
+                    var setupToDelete = new Dictionary<string, object>();
+                    for (int i = 0; i < _setupsDataTable.Columns.Count; i++)
+                    {
+                        var col = _setupsDataTable.Columns[i];
+                        setupToDelete[col.ColumnName] = selectedRow.Cells[i].Value ?? "";
+                    }
+                    
+                    // Get the strategy name before deletion
+                    var deletedStrategyName = setupToDelete.ContainsKey("Strategy") ? setupToDelete["Strategy"]?.ToString() ?? "" : "";
+                    
+                    // Remove from temporary state
+                    _temporarySetups.RemoveAt(rowIndex);
+                    _deletedSetups.Add(setupToDelete);
+                    
+                    // Add undo action
+                    var deleteAction = new DeleteSetupAction(setupToDelete, _temporarySetups, _deletedSetups);
+                    AddUndoAction(deleteAction);
+                    
+                    // Clear strategy references in trades that were using this strategy
+                    if (!string.IsNullOrEmpty(deletedStrategyName))
+                    {
+                        ClearTradesForDeletedStrategy(deletedStrategyName);
+                    }
+                    
+                    // Refresh display
+                    RefreshSetupsDisplay();
+                    
+                    // Mark as having unsaved changes
+                    SetUnsavedChanges(true);
+
+                    MessageBox.Show("Setup deleted successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error deleting setup: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
         private void DataGridViewTrades_MouseClick(object? sender, MouseEventArgs e)
         {
             if (e.Button == MouseButtons.Right)
@@ -798,6 +1389,159 @@ namespace TradingJournalGPT.Forms
             {
                 e.ThrowException = false;
                 Console.WriteLine($"DataGridView formatting error in column {e.ColumnIndex}, row {e.RowIndex}: {e.Exception.Message}");
+            }
+        }
+
+        private void DataGridViewSetups_CellEndEdit(object? sender, DataGridViewCellEventArgs e)
+        {
+            // Handle cell editing for setups
+            if (e.RowIndex >= 0 && e.ColumnIndex >= 0)
+            {
+                var columnName = _setupsDataTable.Columns[e.ColumnIndex].ColumnName;
+                var newValue = dataGridViewSetups.Rows[e.RowIndex].Cells[e.ColumnIndex].Value ?? "";
+                
+                // Update temporary state
+                if (e.RowIndex < _temporarySetups.Count)
+                {
+                    var setup = _temporarySetups[e.RowIndex];
+                    var oldValue = setup.ContainsKey(columnName) ? setup[columnName]?.ToString() ?? "" : "";
+                    setup[columnName] = newValue;
+                    
+                    // If Strategy column was changed, update trades that reference this strategy
+                    if (columnName == "Strategy" && oldValue != newValue.ToString())
+                    {
+                        UpdateTradesForStrategyChange(oldValue, newValue.ToString() ?? "");
+                    }
+                }
+                
+                SetUnsavedChanges(true);
+            }
+        }
+
+        private void DataGridViewSetups_KeyDown(object? sender, KeyEventArgs e)
+        {
+            if (e.Control && e.KeyCode == Keys.V)
+            {
+                // Handle paste operation for setups
+                e.Handled = true;
+            }
+            else if (e.KeyCode == Keys.Delete && dataGridViewSetups.SelectedRows.Count > 0)
+            {
+                DeleteSelectedSetupRow();
+            }
+        }
+
+        private void DataGridViewSetups_DataError(object? sender, DataGridViewDataErrorEventArgs e)
+        {
+            // Handle data errors gracefully for setups
+            e.ThrowException = false;
+        }
+
+        private void DataGridViewSetups_MouseClick(object? sender, MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Right)
+            {
+                var hit = dataGridViewSetups.HitTest(e.X, e.Y);
+                if (hit.RowIndex >= 0)
+                {
+                    dataGridViewSetups.ClearSelection();
+                    dataGridViewSetups.Rows[hit.RowIndex].Selected = true;
+                    _setupsContextMenu.Show(dataGridViewSetups, e.Location);
+                }
+            }
+        }
+
+        private void UpdateTradesForStrategyChange(string oldStrategyName, string newStrategyName)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(oldStrategyName) || string.IsNullOrEmpty(newStrategyName))
+                    return;
+
+                Console.WriteLine($"Updating trades: '{oldStrategyName}' -> '{newStrategyName}'");
+                
+                // Update trades in temporary state
+                var updatedTrades = 0;
+                foreach (var trade in _temporaryTrades)
+                {
+                    if (trade.Setup == oldStrategyName)
+                    {
+                        trade.Setup = newStrategyName;
+                        updatedTrades++;
+                        Console.WriteLine($"Updated trade {trade.Symbol} {trade.Date:yyyy-MM-dd} strategy from '{oldStrategyName}' to '{newStrategyName}'");
+                    }
+                }
+                
+                // Update trades in deleted trades list as well
+                foreach (var trade in _deletedTrades)
+                {
+                    if (trade.Setup == oldStrategyName)
+                    {
+                        trade.Setup = newStrategyName;
+                        Console.WriteLine($"Updated deleted trade {trade.Symbol} {trade.Date:yyyy-MM-dd} strategy from '{oldStrategyName}' to '{newStrategyName}'");
+                    }
+                }
+                
+                // Update Examples column in setups to reflect the strategy name change
+                UpdateSetupsExamplesFromTrades();
+                
+                // Refresh the trades display to show the updated strategy names
+                if (updatedTrades > 0)
+                {
+                    LoadRecentTrades();
+                    Console.WriteLine($"Updated {updatedTrades} trades for strategy name change");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error updating trades for strategy change: {ex.Message}");
+            }
+        }
+
+        private void ClearTradesForDeletedStrategy(string deletedStrategyName)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(deletedStrategyName))
+                    return;
+
+                Console.WriteLine($"Clearing trades for deleted strategy: '{deletedStrategyName}'");
+                
+                // Clear strategy references in temporary state
+                var clearedTrades = 0;
+                foreach (var trade in _temporaryTrades)
+                {
+                    if (trade.Setup == deletedStrategyName)
+                    {
+                        trade.Setup = "";
+                        clearedTrades++;
+                        Console.WriteLine($"Cleared strategy for trade {trade.Symbol} {trade.Date:yyyy-MM-dd} (was '{deletedStrategyName}')");
+                    }
+                }
+                
+                // Clear strategy references in deleted trades list as well
+                foreach (var trade in _deletedTrades)
+                {
+                    if (trade.Setup == deletedStrategyName)
+                    {
+                        trade.Setup = "";
+                        Console.WriteLine($"Cleared strategy for deleted trade {trade.Symbol} {trade.Date:yyyy-MM-dd} (was '{deletedStrategyName}')");
+                    }
+                }
+                
+                // Update Examples column in setups to reflect the deleted strategy
+                UpdateSetupsExamplesFromTrades();
+                
+                // Refresh the trades display to show the cleared strategy names
+                if (clearedTrades > 0)
+                {
+                    LoadRecentTrades();
+                    Console.WriteLine($"Cleared strategy for {clearedTrades} trades");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error clearing trades for deleted strategy: {ex.Message}");
             }
         }
 
@@ -892,41 +1636,16 @@ namespace TradingJournalGPT.Forms
 
         private void InitializeTemporaryState()
         {
-            // Create save button - positioned between analyze folder and refresh buttons
-            _btnSaveChanges = new Button
-            {
-                Text = "Save Changes",
-                BackColor = Color.FromArgb(40, 167, 69),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
-                Size = new Size(120, 30),
-                Location = new Point(324, 12), // Position between folder button (168) and refresh button (638)
-                Visible = true // Make visible for testing
-            };
-            _btnSaveChanges.Click += BtnSaveChanges_Click;
-
-            // Create unsaved changes label
-            _lblUnsavedChanges = new Label
-            {
-                Text = "⚠️ Unsaved Changes",
-                ForeColor = Color.Orange,
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
-                AutoSize = true,
-                Location = new Point(12, 85),
-                Visible = false
-            };
-
-            // Add controls to bottom panel
-            panelBottom.Controls.Add(_btnSaveChanges);
-            panelBottom.Controls.Add(_lblUnsavedChanges);
+            // The save button and unsaved changes label are now created in the Designer
+            // and are globally accessible from the top panel
+            btnSaveChanges.Click += BtnSaveChanges_Click;
         }
 
         private void SetUnsavedChanges(bool hasChanges)
         {
             _hasUnsavedChanges = hasChanges;
-            _btnSaveChanges.Visible = hasChanges;
-            _lblUnsavedChanges.Visible = hasChanges;
+            btnSaveChanges.Visible = hasChanges;
+            lblUnsavedChanges.Visible = hasChanges;
             
             // Update window title to show unsaved changes
             if (hasChanges)
@@ -953,13 +1672,16 @@ namespace TradingJournalGPT.Forms
                 try
                 {
                     Cursor = Cursors.WaitCursor;
-                    _btnSaveChanges.Enabled = false;
-                    _btnSaveChanges.Text = "Saving...";
+                    btnSaveChanges.Enabled = false;
+                    btnSaveChanges.Text = "Saving...";
 
                     // Save all temporary trades to storage
                     await _localStorageService.SaveTrades(_temporaryTrades);
 
-                                         // Clean up images for deleted trades (only when permanently saving)
+                    // Update Examples column in setups based on current trades
+                    UpdateSetupsExamplesFromTrades();
+
+                    // Clean up images for deleted trades (only when permanently saving)
                      if (_deletedTrades.Count > 0)
                      {
                          var imageStorageService = new ImageStorageService();
@@ -980,6 +1702,17 @@ namespace TradingJournalGPT.Forms
                          _deletedTrades.Clear(); // Clear the deleted trades list
                      }
 
+                    // Save setups data
+                    await SaveSetupsData();
+                    
+                    // Save technicals data
+                    await SaveTechnicalsData();
+                    
+                    // Clear deleted items after successful save
+                    _deletedTrades.Clear();
+                    _deletedSetups.Clear();
+                    _deletedTechnicals.Clear();
+
                     // Clear undo/redo stacks since changes are now permanent
                     _undoStack.Clear();
                     _redoStack.Clear();
@@ -990,6 +1723,7 @@ namespace TradingJournalGPT.Forms
                     
                     // Reload from storage to ensure consistency
                     LoadRecentTrades();
+                    await LoadSetupsData(); // Reload setups data after saving
 
                     MessageBox.Show("Changes saved successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
@@ -1000,9 +1734,58 @@ namespace TradingJournalGPT.Forms
                 finally
                 {
                     Cursor = Cursors.Default;
-                    _btnSaveChanges.Enabled = true;
-                    _btnSaveChanges.Text = "Save Changes";
+                    btnSaveChanges.Enabled = true;
+                    btnSaveChanges.Text = "Save Changes";
                 }
+            }
+        }
+
+        /// <summary>
+        /// Updates the Examples column in setups based on the current trades data.
+        /// Aggregates all symbols for each strategy and updates the Examples column.
+        /// </summary>
+        private void UpdateSetupsExamplesFromTrades()
+        {
+            try
+            {
+                // Get all trades (including temporary and excluding deleted)
+                var allTrades = _temporaryTrades.ToList();
+                
+                // Group trades by strategy
+                var strategyGroups = allTrades
+                    .Where(trade => !string.IsNullOrEmpty(trade.Setup))
+                    .GroupBy(trade => trade.Setup)
+                    .ToDictionary(g => g.Key, g => g.Select(t => t.Symbol).Distinct().ToList());
+
+                // Update each setup's Examples column
+                foreach (var setup in _temporarySetups)
+                {
+                    if (setup.ContainsKey("Strategy") && setup["Strategy"] != null)
+                    {
+                        string strategyName = setup["Strategy"].ToString() ?? "";
+                        
+                        if (strategyGroups.ContainsKey(strategyName))
+                        {
+                            // Join symbols with commas
+                            string examples = string.Join(", ", strategyGroups[strategyName]);
+                            setup["Examples"] = examples;
+                        }
+                        else
+                        {
+                            // No trades for this strategy, clear examples
+                            setup["Examples"] = "";
+                        }
+                    }
+                }
+
+                // Refresh the setups display to show updated examples
+                RefreshSetupsDisplay();
+                
+                Console.WriteLine($"Updated Examples column for {strategyGroups.Count} strategies");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error updating setups examples: {ex.Message}");
             }
         }
 
@@ -1048,7 +1831,25 @@ namespace TradingJournalGPT.Forms
 
         private void exportToExcelMenuItem_Click(object? sender, EventArgs e)
         {
-            MessageBox.Show("Excel export functionality will be implemented in a future version.", "Coming Soon", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            try
+            {
+                using (var saveFileDialog = new SaveFileDialog())
+                {
+                    saveFileDialog.Filter = "Excel Files (*.xlsx)|*.xlsx";
+                    saveFileDialog.Title = "Export to Excel";
+                    saveFileDialog.FileName = $"TradingJournal_{DateTime.Now:yyyy-MM-dd}.xlsx";
+
+                    if (saveFileDialog.ShowDialog() == DialogResult.OK)
+                    {
+                        ExportToExcel(saveFileDialog.FileName);
+                        MessageBox.Show($"Data exported successfully to {saveFileDialog.FileName}", "Export Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error exporting to Excel: {ex.Message}", "Export Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void exitMenuItem_Click(object? sender, EventArgs e)
@@ -1093,7 +1894,15 @@ namespace TradingJournalGPT.Forms
 
         private void deleteMenuItem_Click(object? sender, EventArgs e)
         {
-            DeleteSelectedRow();
+            // Check which tab is currently active
+            if (tabControl.SelectedTab == tabPageTrades)
+            {
+                DeleteSelectedRow();
+            }
+            else if (tabControl.SelectedTab == tabPageSetups)
+            {
+                DeleteSelectedSetupRow();
+            }
         }
 
         private void refreshMenuItem_Click(object? sender, EventArgs e)
@@ -1166,8 +1975,8 @@ namespace TradingJournalGPT.Forms
             try
             {
                 Cursor = Cursors.WaitCursor;
-                _btnSaveChanges.Enabled = false;
-                _btnSaveChanges.Text = "Saving...";
+                btnSaveChanges.Enabled = false;
+                btnSaveChanges.Text = "Saving...";
 
                 // Save all temporary trades to storage
                 await _localStorageService.SaveTrades(_temporaryTrades);
@@ -1193,6 +2002,12 @@ namespace TradingJournalGPT.Forms
                     _deletedTrades.Clear(); // Clear the deleted trades list
                 }
 
+                // Save setups data
+                await SaveSetupsData();
+
+                // Clear deleted setups list after saving
+                _deletedSetups.Clear();
+
                 // Clear undo/redo stacks since changes are now permanent
                 _undoStack.Clear();
                 _redoStack.Clear();
@@ -1214,8 +2029,8 @@ namespace TradingJournalGPT.Forms
             finally
             {
                 Cursor = Cursors.Default;
-                _btnSaveChanges.Enabled = true;
-                _btnSaveChanges.Text = "Save Changes";
+                btnSaveChanges.Enabled = true;
+                btnSaveChanges.Text = "Save Changes";
             }
         }
 
@@ -1275,7 +2090,9 @@ namespace TradingJournalGPT.Forms
                 
                 // Refresh the display and mark as having unsaved changes
                 LoadRecentTrades();
-                SetUnsavedChanges(true);
+                RefreshSetupsDisplay();
+                RefreshTechnicalsDisplay();
+                UpdateUndoRedoMenuItems();
             }
         }
 
@@ -1292,7 +2109,9 @@ namespace TradingJournalGPT.Forms
                 
                 // Refresh the display and mark as having unsaved changes
                 LoadRecentTrades();
-                SetUnsavedChanges(true);
+                RefreshSetupsDisplay();
+                RefreshTechnicalsDisplay();
+                UpdateUndoRedoMenuItems();
             }
         }
 
@@ -1331,18 +2150,261 @@ namespace TradingJournalGPT.Forms
             var csv = new System.Text.StringBuilder();
             
             // Add headers
-            csv.AppendLine("Symbol,Date,Trade Seq,Previous Close,High After Volume Surge,Low After Volume Surge,Gap % (Close to High),Gap % (High to Low),Volume (M)");
+            csv.AppendLine("Symbol,Date,Trade Seq,Previous Close,High After Volume Surge,Low After Volume Surge,Gap % (Close to High),Gap % (High to Low),Volume (M),Strategy,Float,Catalyst,Technicals");
             
             // Add data rows
             foreach (var row in trades)
             {
-                csv.AppendLine($"{row["Symbol"]},{row["Date"]},{row["Trade Seq"]},{row["Previous Close"]},{row["High After Volume Surge"]},{row["Low After Volume Surge"]},{row["Gap % (Close to High)"]},{row["Gap % (High to Low)"]},{row["Volume (M)"]}");
+                csv.AppendLine($"{row["Symbol"]},{row["Date"]},{row["Trade Seq"]},{row["Previous Close"]},{row["High After Volume Surge"]},{row["Low After Volume Surge"]},{row["Gap % (Close to High)"]},{row["Gap % (High to Low)"]},{row["Volume (M)"]},{row["Strategy"]},{row["Float"]},{row["Catalyst"]},{row["Technicals"]}");
             }
             
             File.WriteAllText(filePath, csv.ToString());
         }
 
+        private void ExportToExcel(string filePath)
+        {
+            // Set EPPlus license context for non-commercial use
+            ExcelPackage.LicenseContext = OfficeOpenXml.LicenseContext.NonCommercial;
+            
+            using (var package = new OfficeOpenXml.ExcelPackage())
+            {
+                // Export Trades data
+                var tradesWorksheet = package.Workbook.Worksheets.Add("Trades");
+                
+                // Add headers for trades
+                tradesWorksheet.Cells[1, 1].Value = "Symbol";
+                tradesWorksheet.Cells[1, 2].Value = "Date";
+                tradesWorksheet.Cells[1, 3].Value = "Trade Seq";
+                tradesWorksheet.Cells[1, 4].Value = "Previous Close";
+                tradesWorksheet.Cells[1, 5].Value = "High After Volume Surge";
+                tradesWorksheet.Cells[1, 6].Value = "Low After Volume Surge";
+                tradesWorksheet.Cells[1, 7].Value = "Gap % (Close to High)";
+                tradesWorksheet.Cells[1, 8].Value = "Gap % (High to Low)";
+                tradesWorksheet.Cells[1, 9].Value = "Volume (M)";
+                tradesWorksheet.Cells[1, 10].Value = "Strategy";
+                tradesWorksheet.Cells[1, 11].Value = "Float";
+                tradesWorksheet.Cells[1, 12].Value = "Catalyst";
+                tradesWorksheet.Cells[1, 13].Value = "Technicals";
+                tradesWorksheet.Cells[1, 14].Value = "Chart Image Path";
+
+                // Style the header row
+                using (var range = tradesWorksheet.Cells[1, 1, 1, 14])
+                {
+                    range.Style.Font.Bold = true;
+                    range.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
+                    range.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightGray);
+                }
+
+                // Add trades data
+                int row = 2;
+                foreach (var trade in _temporaryTrades)
+                {
+                    tradesWorksheet.Cells[row, 1].Value = trade.Symbol;
+                    tradesWorksheet.Cells[row, 2].Value = trade.Date.ToString("yyyy-MM-dd");
+                    tradesWorksheet.Cells[row, 3].Value = trade.TradeSeq;
+                    tradesWorksheet.Cells[row, 4].Value = trade.PreviousDayClose;
+                    tradesWorksheet.Cells[row, 5].Value = trade.HighAfterVolumeSurge;
+                    tradesWorksheet.Cells[row, 6].Value = trade.LowAfterVolumeSurge;
+                    tradesWorksheet.Cells[row, 7].Value = trade.GapPercentToHigh;
+                    tradesWorksheet.Cells[row, 8].Value = trade.GapPercentHighToLow;
+                    tradesWorksheet.Cells[row, 9].Value = trade.Volume / 1000000m;
+                    tradesWorksheet.Cells[row, 10].Value = trade.Setup;
+                    tradesWorksheet.Cells[row, 11].Value = trade.Float;
+                    tradesWorksheet.Cells[row, 12].Value = trade.Catalyst;
+                    tradesWorksheet.Cells[row, 13].Value = trade.Technicals;
+                    tradesWorksheet.Cells[row, 14].Value = trade.ChartImagePath;
+                    row++;
+                }
+
+                // Auto-fit columns for trades
+                tradesWorksheet.Cells[tradesWorksheet.Dimension.Address].AutoFitColumns();
+
+                // Export Setups data
+                var setupsWorksheet = package.Workbook.Worksheets.Add("Setups");
+                
+                // Add headers for setups
+                setupsWorksheet.Cells[1, 1].Value = "Strategy";
+                setupsWorksheet.Cells[1, 2].Value = "Direction";
+                setupsWorksheet.Cells[1, 3].Value = "Cycle";
+                setupsWorksheet.Cells[1, 4].Value = "Meta Grade";
+                setupsWorksheet.Cells[1, 5].Value = "Description";
+                setupsWorksheet.Cells[1, 6].Value = "Pre-req";
+                setupsWorksheet.Cells[1, 7].Value = "Ruin Variables";
+                setupsWorksheet.Cells[1, 8].Value = "Entry (s)";
+                setupsWorksheet.Cells[1, 9].Value = "Exit 1";
+                setupsWorksheet.Cells[1, 10].Value = "Exit 2";
+                setupsWorksheet.Cells[1, 11].Value = "Exit 3";
+                setupsWorksheet.Cells[1, 12].Value = "Stop";
+                setupsWorksheet.Cells[1, 13].Value = "Examples";
+
+                // Style the header row for setups
+                using (var range = setupsWorksheet.Cells[1, 1, 1, 13])
+                {
+                    range.Style.Font.Bold = true;
+                    range.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
+                    range.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightBlue);
+                }
+
+                // Add setups data
+                row = 2;
+                foreach (var setup in _temporarySetups)
+                {
+                    setupsWorksheet.Cells[row, 1].Value = setup.ContainsKey("Strategy") ? setup["Strategy"]?.ToString() : "";
+                    setupsWorksheet.Cells[row, 2].Value = setup.ContainsKey("Direction") ? setup["Direction"]?.ToString() : "";
+                    setupsWorksheet.Cells[row, 3].Value = setup.ContainsKey("Cycle") ? setup["Cycle"]?.ToString() : "";
+                    setupsWorksheet.Cells[row, 4].Value = setup.ContainsKey("Meta Grade") ? setup["Meta Grade"]?.ToString() : "";
+                    setupsWorksheet.Cells[row, 5].Value = setup.ContainsKey("Description") ? setup["Description"]?.ToString() : "";
+                    setupsWorksheet.Cells[row, 6].Value = setup.ContainsKey("Pre-req") ? setup["Pre-req"]?.ToString() : "";
+                    setupsWorksheet.Cells[row, 7].Value = setup.ContainsKey("Ruin Variables") ? setup["Ruin Variables"]?.ToString() : "";
+                    setupsWorksheet.Cells[row, 8].Value = setup.ContainsKey("Entry (s)") ? setup["Entry (s)"]?.ToString() : "";
+                    setupsWorksheet.Cells[row, 9].Value = setup.ContainsKey("Exit 1") ? setup["Exit 1"]?.ToString() : "";
+                    setupsWorksheet.Cells[row, 10].Value = setup.ContainsKey("Exit 2") ? setup["Exit 2"]?.ToString() : "";
+                    setupsWorksheet.Cells[row, 11].Value = setup.ContainsKey("Exit 3") ? setup["Exit 3"]?.ToString() : "";
+                    setupsWorksheet.Cells[row, 12].Value = setup.ContainsKey("Stop") ? setup["Stop"]?.ToString() : "";
+                    setupsWorksheet.Cells[row, 13].Value = setup.ContainsKey("Examples") ? setup["Examples"]?.ToString() : "";
+                    row++;
+                }
+
+                // Auto-fit columns for setups
+                setupsWorksheet.Cells[setupsWorksheet.Dimension.Address].AutoFitColumns();
+
+                // Save the Excel file
+                package.SaveAs(new FileInfo(filePath));
+            }
+        }
+
         #endregion
+
+        private void RefreshTechnicalsDisplay()
+        {
+            try
+            {
+                _technicalsDataTable.Clear();
+                
+                foreach (var technical in _temporaryTechnicals)
+                {
+                    _technicalsDataTable.Rows.Add(
+                        technical.ContainsKey("Type") ? technical["Type"]?.ToString() ?? "" : "",
+                        technical.ContainsKey("Description") ? technical["Description"]?.ToString() ?? "" : "",
+                        technical.ContainsKey("Examples") ? technical["Examples"]?.ToString() ?? "" : ""
+                    );
+                }
+                
+                Console.WriteLine($"RefreshTechnicalsDisplay completed - {_temporaryTechnicals.Count} technicals displayed");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error refreshing technicals display: {ex.Message}");
+            }
+        }
+
+        private void CreateTechnicalsContextMenu()
+        {
+            _technicalsContextMenu = new ContextMenuStrip();
+            var deleteItem = new ToolStripMenuItem("Delete Technical");
+            deleteItem.Click += (sender, e) => DeleteSelectedTechnicalRow();
+            _technicalsContextMenu.Items.Add(deleteItem);
+        }
+
+        private void DeleteSelectedTechnicalRow()
+        {
+            if (dataGridViewTechnicals.SelectedRows.Count == 0) return;
+
+            var result = MessageBox.Show(
+                "Are you sure you want to delete this technical?",
+                "Confirm Delete",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+
+            if (result == DialogResult.Yes)
+            {
+                try
+                {
+                    var selectedRow = dataGridViewTechnicals.SelectedRows[0];
+                    var rowIndex = selectedRow.Index;
+                    
+                    // Get the technical data before deletion
+                    var technicalToDelete = new Dictionary<string, object>();
+                    for (int i = 0; i < _technicalsDataTable.Columns.Count; i++)
+                    {
+                        var col = _technicalsDataTable.Columns[i];
+                        technicalToDelete[col.ColumnName] = selectedRow.Cells[i].Value ?? "";
+                    }
+                    
+                    // Remove from temporary state
+                    _temporaryTechnicals.RemoveAt(rowIndex);
+                    _deletedTechnicals.Add(technicalToDelete);
+                    
+                    // Add undo action
+                    var deleteAction = new DeleteTechnicalAction(technicalToDelete, _temporaryTechnicals, _deletedTechnicals);
+                    AddUndoAction(deleteAction);
+                    
+                    // Refresh display
+                    RefreshTechnicalsDisplay();
+                    
+                    // Mark as having unsaved changes
+                    SetUnsavedChanges(true);
+
+                    MessageBox.Show("Technical deleted successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error deleting technical: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        private void DataGridViewTechnicals_CellEndEdit(object? sender, DataGridViewCellEventArgs e)
+        {
+            try
+            {
+                if (e.RowIndex >= 0 && e.RowIndex < _temporaryTechnicals.Count)
+                {
+                    var technical = _temporaryTechnicals[e.RowIndex];
+                    var columnName = dataGridViewTechnicals.Columns[e.ColumnIndex].Name;
+                    var newValue = dataGridViewTechnicals.Rows[e.RowIndex].Cells[e.ColumnIndex].Value?.ToString() ?? "";
+                    
+                    if (technical.ContainsKey(columnName) && technical[columnName]?.ToString() != newValue)
+                    {
+                        technical[columnName] = newValue;
+                        SetUnsavedChanges(true);
+                        Console.WriteLine($"Updated technical {columnName} to: {newValue}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in DataGridViewTechnicals_CellEndEdit: {ex.Message}");
+            }
+        }
+
+        private void DataGridViewTechnicals_KeyDown(object? sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Delete)
+            {
+                DeleteSelectedTechnicalRow();
+                e.Handled = true;
+            }
+        }
+
+        private void DataGridViewTechnicals_DataError(object? sender, DataGridViewDataErrorEventArgs e)
+        {
+            Console.WriteLine($"DataGridViewTechnicals data error: {e.Exception.Message}");
+        }
+
+        private void DataGridViewTechnicals_MouseClick(object? sender, MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Right)
+            {
+                var hit = dataGridViewTechnicals.HitTest(e.X, e.Y);
+                if (hit.RowIndex >= 0)
+                {
+                    dataGridViewTechnicals.ClearSelection();
+                    dataGridViewTechnicals.Rows[hit.RowIndex].Selected = true;
+                    _technicalsContextMenu.Show(dataGridViewTechnicals, e.Location);
+                }
+            }
+        }
     }
 
     #region Undo/Redo Action Classes
@@ -1451,6 +2513,10 @@ namespace TradingJournalGPT.Forms
                     tradeToRestore.GapPercentToHigh = _originalTrade.GapPercentToHigh;
                     tradeToRestore.GapPercentHighToLow = _originalTrade.GapPercentHighToLow;
                     tradeToRestore.Volume = _originalTrade.Volume;
+                    tradeToRestore.Setup = _originalTrade.Setup;
+                    tradeToRestore.Float = _originalTrade.Float;
+                    tradeToRestore.Catalyst = _originalTrade.Catalyst;
+                    tradeToRestore.Technicals = _originalTrade.Technicals;
 
                     Console.WriteLine($"Undo: Restored original values for trade {_originalTrade.Symbol}");
                 }
@@ -1483,6 +2549,10 @@ namespace TradingJournalGPT.Forms
                     tradeToModify.GapPercentToHigh = _modifiedTrade.GapPercentToHigh;
                     tradeToModify.GapPercentHighToLow = _modifiedTrade.GapPercentHighToLow;
                     tradeToModify.Volume = _modifiedTrade.Volume;
+                    tradeToModify.Setup = _modifiedTrade.Setup;
+                    tradeToModify.Float = _modifiedTrade.Float;
+                    tradeToModify.Catalyst = _modifiedTrade.Catalyst;
+                    tradeToModify.Technicals = _modifiedTrade.Technicals;
 
                     Console.WriteLine($"Redo: Applied modified values for trade {_modifiedTrade.Symbol}");
                 }
@@ -1498,5 +2568,157 @@ namespace TradingJournalGPT.Forms
         }
     }
 
+    public class DeleteSetupAction : UndoRedoAction
+    {
+        private readonly Dictionary<string, object> _deletedSetup;
+        private readonly List<Dictionary<string, object>> _temporarySetups;
+        private readonly List<Dictionary<string, object>> _deletedSetups;
+
+        public DeleteSetupAction(Dictionary<string, object> deletedSetup, List<Dictionary<string, object>> temporarySetups, List<Dictionary<string, object>> deletedSetups)
+        {
+            _deletedSetup = deletedSetup;
+            _temporarySetups = temporarySetups;
+            _deletedSetups = deletedSetups;
+        }
+
+        public override void Undo()
+        {
+            try
+            {
+                // Check if setup already exists in temporary setups to prevent duplicates
+                var existingSetup = _temporarySetups.FirstOrDefault(s =>
+                    s["Strategy"]?.ToString() == _deletedSetup["Strategy"]?.ToString() &&
+                    s["Direction"]?.ToString() == _deletedSetup["Direction"]?.ToString() &&
+                    s["Cycle"]?.ToString() == _deletedSetup["Cycle"]?.ToString() &&
+                    s["Meta Grade"]?.ToString() == _deletedSetup["Meta Grade"]?.ToString() &&
+                    s["Description"]?.ToString() == _deletedSetup["Description"]?.ToString() &&
+                    s["Pre-req"]?.ToString() == _deletedSetup["Pre-req"]?.ToString() &&
+                    s["Ruin Variables"]?.ToString() == _deletedSetup["Ruin Variables"]?.ToString() &&
+                    s["Entry (s)"]?.ToString() == _deletedSetup["Entry (s)"]?.ToString() &&
+                    s["Exit 1"]?.ToString() == _deletedSetup["Exit 1"]?.ToString() &&
+                    s["Exit 2"]?.ToString() == _deletedSetup["Exit 2"]?.ToString() &&
+                    s["Exit 3"]?.ToString() == _deletedSetup["Exit 3"]?.ToString() &&
+                    s["Stop"]?.ToString() == _deletedSetup["Stop"]?.ToString() &&
+                    s["Examples"]?.ToString() == _deletedSetup["Examples"]?.ToString());
+
+                if (existingSetup == null)
+                {
+                    _temporarySetups.Add(_deletedSetup);
+                    _deletedSetups.Remove(_deletedSetup); // Remove from deleted setups list
+                    Console.WriteLine($"Undo: Restored setup {_deletedSetup["Strategy"]} (Strategy)");
+                }
+                else
+                {
+                    Console.WriteLine($"Undo: Setup {_deletedSetup["Strategy"]} already exists in temporary state, skipping");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error during undo: {ex.Message}");
+            }
+        }
+
+        public override void Redo()
+        {
+            try
+            {
+                var setupToDelete = _temporarySetups.FirstOrDefault(s =>
+                    s["Strategy"]?.ToString() == _deletedSetup["Strategy"]?.ToString() &&
+                    s["Direction"]?.ToString() == _deletedSetup["Direction"]?.ToString() &&
+                    s["Cycle"]?.ToString() == _deletedSetup["Cycle"]?.ToString() &&
+                    s["Meta Grade"]?.ToString() == _deletedSetup["Meta Grade"]?.ToString() &&
+                    s["Description"]?.ToString() == _deletedSetup["Description"]?.ToString() &&
+                    s["Pre-req"]?.ToString() == _deletedSetup["Pre-req"]?.ToString() &&
+                    s["Ruin Variables"]?.ToString() == _deletedSetup["Ruin Variables"]?.ToString() &&
+                    s["Entry (s)"]?.ToString() == _deletedSetup["Entry (s)"]?.ToString() &&
+                    s["Exit 1"]?.ToString() == _deletedSetup["Exit 1"]?.ToString() &&
+                    s["Exit 2"]?.ToString() == _deletedSetup["Exit 2"]?.ToString() &&
+                    s["Exit 3"]?.ToString() == _deletedSetup["Exit 3"]?.ToString() &&
+                    s["Stop"]?.ToString() == _deletedSetup["Stop"]?.ToString() &&
+                    s["Examples"]?.ToString() == _deletedSetup["Examples"]?.ToString());
+
+                if (setupToDelete != null)
+                {
+                    _temporarySetups.Remove(setupToDelete);
+                    _deletedSetups.Add(setupToDelete); // Add the actual setup found, not _deletedSetup
+                    Console.WriteLine($"Redo: Deleted setup {setupToDelete["Strategy"]} (Strategy)");
+                }
+                else
+                {
+                    Console.WriteLine($"Redo: Setup {_deletedSetup["Strategy"]} not found in temporary state");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error during redo: {ex.Message}");
+            }
+        }
+    }
+
+    public class DeleteTechnicalAction : UndoRedoAction
+    {
+        private readonly Dictionary<string, object> _deletedTechnical;
+        private readonly List<Dictionary<string, object>> _temporaryTechnicals;
+        private readonly List<Dictionary<string, object>> _deletedTechnicals;
+
+        public DeleteTechnicalAction(Dictionary<string, object> deletedTechnical, List<Dictionary<string, object>> temporaryTechnicals, List<Dictionary<string, object>> deletedTechnicals)
+        {
+            _deletedTechnical = deletedTechnical;
+            _temporaryTechnicals = temporaryTechnicals;
+            _deletedTechnicals = deletedTechnicals;
+        }
+
+        public override void Undo()
+        {
+            try
+            {
+                // Check if technical already exists in temporary technicals to prevent duplicates
+                var existingTechnical = _temporaryTechnicals.FirstOrDefault(t =>
+                    t.ContainsKey("Type") && _deletedTechnical.ContainsKey("Type") &&
+                    t["Type"]?.ToString() == _deletedTechnical["Type"]?.ToString());
+
+                if (existingTechnical == null)
+                {
+                    _temporaryTechnicals.Add(_deletedTechnical);
+                    _deletedTechnicals.Remove(_deletedTechnical);
+                    Console.WriteLine($"Undo: Restored technical {_deletedTechnical["Type"]}");
+                }
+                else
+                {
+                    Console.WriteLine($"Undo: Technical {_deletedTechnical["Type"]} already exists in temporary state, skipping");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error during undo: {ex.Message}");
+            }
+        }
+
+        public override void Redo()
+        {
+            try
+            {
+                var technicalToDelete = _temporaryTechnicals.FirstOrDefault(t =>
+                    t.ContainsKey("Type") && _deletedTechnical.ContainsKey("Type") &&
+                    t["Type"]?.ToString() == _deletedTechnical["Type"]?.ToString());
+
+                if (technicalToDelete != null)
+                {
+                    _temporaryTechnicals.Remove(technicalToDelete);
+                    _deletedTechnicals.Add(technicalToDelete);
+                    Console.WriteLine($"Redo: Deleted technical {technicalToDelete["Type"]}");
+                }
+                else
+                {
+                    Console.WriteLine($"Redo: Technical {_deletedTechnical["Type"]} not found in temporary state");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error during redo: {ex.Message}");
+            }
+        }
+    }
+
     #endregion
-} 
+}
