@@ -825,7 +825,7 @@ namespace TradingJournalGPT.Forms
 
         private void InitializeTemporaryState()
         {
-            // Create save button - positioned next to the analyze chart buttons
+            // Create save button - positioned between analyze folder and refresh buttons
             _btnSaveChanges = new Button
             {
                 Text = "Save Changes",
@@ -834,8 +834,8 @@ namespace TradingJournalGPT.Forms
                 FlatStyle = FlatStyle.Flat,
                 Font = new Font("Segoe UI", 9F, FontStyle.Bold),
                 Size = new Size(120, 30),
-                Location = new Point(400, 12), // Position next to analyze buttons
-                Visible = false
+                Location = new Point(324, 12), // Position between folder button (168) and refresh button (638)
+                Visible = true // Make visible for testing
             };
             _btnSaveChanges.Click += BtnSaveChanges_Click;
 
