@@ -60,6 +60,7 @@ namespace TradingJournalGPT.Forms
                 await _floatDataService.InitializeAsync(); // Initialize float data service
                 this.Invoke(() => LoadRecentTrades());
                 await LoadSetupsData(); // Load setups data on startup
+                await LoadTechnicalsData(); // Load technicals data on startup
             });
         }
 
@@ -1902,6 +1903,10 @@ namespace TradingJournalGPT.Forms
             else if (tabControl.SelectedTab == tabPageSetups)
             {
                 DeleteSelectedSetupRow();
+            }
+            else if (tabControl.SelectedTab == tabPageTechnicals)
+            {
+                DeleteSelectedTechnicalRow();
             }
         }
 
