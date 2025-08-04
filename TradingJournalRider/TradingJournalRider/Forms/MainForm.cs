@@ -98,6 +98,29 @@ namespace TradingJournalGPT.Forms
             {
                 Cursor = Cursors.WaitCursor;
                 
+                // Skip merging if we're in the middle of an undo/redo operation
+                if (_isUndoRedoAction)
+                {
+                    // Just refresh the display with current temporary trades
+                    _tradesDataTable.Clear();
+                    foreach (var trade in _temporaryTrades)
+                    {
+                        _tradesDataTable.Rows.Add(
+                            trade.Symbol,
+                            trade.Date,
+                            trade.TradeSeq,
+                            trade.PreviousDayClose,
+                            trade.HighAfterVolumeSurge,
+                            trade.LowAfterVolumeSurge,
+                            trade.GapPercentToHigh,
+                            trade.GapPercentHighToLow,
+                            trade.Volume / 1000000m,
+                            trade.ChartImagePath ?? "No Image"
+                        );
+                    }
+                    return; // Exit early to avoid merging during undo/redo
+                }
+                
                 // Always load from storage to get the latest data
                 var storageTrades = await _tradingJournalService.GetRecentTrades(50, true);
                 
