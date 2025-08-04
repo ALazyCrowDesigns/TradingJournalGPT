@@ -495,14 +495,25 @@ namespace TradingJournalGPT.Forms
                     var date = selectedRow.Cells["Date"].Value?.ToString();
                     var tradeSeq = Convert.ToInt32(selectedRow.Cells["Trade Seq"].Value ?? 0);
 
+                    // Parse the date string properly
+                    DateTime parsedDate;
+                    if (!DateTime.TryParse(date, out parsedDate))
+                    {
+                        Console.WriteLine($"Warning: Could not parse date '{date}' for delete");
+                        MessageBox.Show($"Could not parse date '{date}'. Please try again.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+
                     // Find the trade in temporary state
                     var tradeToDelete = _temporaryTrades.FirstOrDefault(t => 
                         t.Symbol == symbol && 
-                        t.Date.ToString("yyyy-MM-dd") == date &&
+                        t.Date.Date == parsedDate.Date &&
                         t.TradeSeq == tradeSeq);
 
                     if (tradeToDelete != null)
                     {
+                        Console.WriteLine($"Found trade to delete: {tradeToDelete.Symbol} on {tradeToDelete.Date:yyyy-MM-dd} with TradeSeq {tradeToDelete.TradeSeq}");
+                        
                         // Create undo action for temporary state
                         var undoAction = new DeleteTradeAction(tradeToDelete, _temporaryTrades, _deletedTrades);
                         AddUndoAction(undoAction);
@@ -523,6 +534,12 @@ namespace TradingJournalGPT.Forms
                     }
                     else
                     {
+                        Console.WriteLine($"No trade found matching: Symbol={symbol}, Date={parsedDate:yyyy-MM-dd}, TradeSeq={tradeSeq}");
+                        Console.WriteLine("Available trades in temporary state:");
+                        foreach (var trade in _temporaryTrades)
+                        {
+                            Console.WriteLine($"  - {trade.Symbol} on {trade.Date:yyyy-MM-dd} with TradeSeq {trade.TradeSeq}");
+                        }
                         MessageBox.Show("Trade not found in temporary state. Please refresh and try again.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     }
                 }
