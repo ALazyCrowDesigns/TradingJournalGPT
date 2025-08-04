@@ -44,7 +44,7 @@ namespace TradingJournalGPT.Forms
             // Load initial data from storage
             _ = Task.Run(async () => 
             {
-                await Task.Delay(100); // Small delay to ensure UI is ready
+                await Task.Delay(200); // Increased delay to ensure UI is fully ready
                 this.Invoke(() => LoadRecentTrades());
             });
         }
@@ -291,6 +291,9 @@ namespace TradingJournalGPT.Forms
                             Console.WriteLine("Trade recorded to Google Sheets and added to temporary state");
                         }
                         
+                        // Mark as having unsaved changes for immediate display
+                        SetUnsavedChanges(true);
+                        
                         Console.WriteLine("Trade recorded, refreshing data table...");
                         // Refresh the data table
                         LoadRecentTrades();
@@ -361,6 +364,9 @@ namespace TradingJournalGPT.Forms
                         // Add to temporary state for immediate display
                         _temporaryTrades.Add(tradeData);
                         recordedCount++;
+                        
+                        // Mark as having unsaved changes for immediate display
+                        SetUnsavedChanges(true);
                     }
                     catch (Exception ex)
                     {
@@ -371,7 +377,7 @@ namespace TradingJournalGPT.Forms
                     processedCount++;
                 }
 
-                // Refresh the data table
+                // Refresh the data table (but don't merge since we have unsaved changes)
                 LoadRecentTrades();
 
                 MessageBox.Show(
