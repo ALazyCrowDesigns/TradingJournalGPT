@@ -137,7 +137,7 @@ namespace TradingJournalGPT.Services
                     LowAfterVolumeSurge = GetDecimalValue(root, "lowAfterVolumeSurge"),
                     PreviousDayClose = GetDecimalValue(root, "previousDayClose"),
                     GapPercentToHigh = GetDecimalValue(root, "gapPercentToHigh"),
-                    GapPercentHighToLow = GetDecimalValue(root, "gapPercentHighToLow"),
+                    GapPercentHighToLow = Math.Abs(GetDecimalValue(root, "gapPercentHighToLow")),
                     Volume = (long)(GetDecimalValue(root, "volume") * 1000000), // Convert millions to actual volume
                     Analysis = "" // No longer needed
                 };
