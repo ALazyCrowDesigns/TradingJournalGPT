@@ -1,0 +1,34 @@
+# Build outputs
+bin/
+obj/
+*.exe
+*.dll
+*.pdb
+
+# IDE files
+.vs/
+*.user
+*.suo
+*.cache
+.idea/
+
+# Configuration files with sensitive data
+appsettings.json
+long-equinox-467916-v9-3f383fa4f833.json
+ChatGPTAPI.txt
+
+# Temporary files
+*.tmp
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Data files (local storage)
+Data/
+*.json
+
+# Chart images (stored locally)
+Charts/
+ChartImages/ 
