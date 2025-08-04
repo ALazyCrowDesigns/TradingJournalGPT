@@ -377,8 +377,24 @@ namespace TradingJournalGPT.Forms
                     processedCount++;
                 }
 
-                // Refresh the data table (but don't merge since we have unsaved changes)
-                LoadRecentTrades();
+                // Refresh the data table without merging (since we have unsaved changes)
+                // Just refresh the display with current temporary trades
+                _tradesDataTable.Clear();
+                foreach (var trade in _temporaryTrades.OrderByDescending(t => t.Date).ThenByDescending(t => t.TradeSeq))
+                {
+                    _tradesDataTable.Rows.Add(
+                        trade.Symbol,
+                        trade.Date,
+                        trade.TradeSeq,
+                        trade.PreviousDayClose,
+                        trade.HighAfterVolumeSurge,
+                        trade.LowAfterVolumeSurge,
+                        trade.GapPercentToHigh,
+                        trade.GapPercentHighToLow,
+                        trade.Volume / 1000000m,
+                        trade.ChartImagePath ?? "No Image"
+                    );
+                }
 
                 MessageBox.Show(
                     $"Processing complete!\n\nProcessed: {processedCount} images\nRecorded: {recordedCount} trades",
