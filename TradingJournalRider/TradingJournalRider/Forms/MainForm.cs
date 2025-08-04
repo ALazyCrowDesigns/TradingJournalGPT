@@ -1194,9 +1194,22 @@ namespace TradingJournalGPT.Forms
         {
             try
             {
-                _temporaryTrades.Add(_deletedTrade);
-                _deletedTrades.Remove(_deletedTrade); // Remove from deleted trades list
-                Console.WriteLine($"Undo: Restored trade {_deletedTrade.Symbol} on {_deletedTrade.Date:yyyy-MM-dd}");
+                // Check if trade already exists in temporary trades to prevent duplicates
+                var existingTrade = _temporaryTrades.FirstOrDefault(t =>
+                    t.Symbol == _deletedTrade.Symbol &&
+                    t.Date.Date == _deletedTrade.Date.Date &&
+                    t.TradeSeq == _deletedTrade.TradeSeq);
+
+                if (existingTrade == null)
+                {
+                    _temporaryTrades.Add(_deletedTrade);
+                    _deletedTrades.Remove(_deletedTrade); // Remove from deleted trades list
+                    Console.WriteLine($"Undo: Restored trade {_deletedTrade.Symbol} on {_deletedTrade.Date:yyyy-MM-dd}");
+                }
+                else
+                {
+                    Console.WriteLine($"Undo: Trade {_deletedTrade.Symbol} already exists in temporary state, skipping");
+                }
             }
             catch (Exception ex)
             {
@@ -1216,8 +1229,12 @@ namespace TradingJournalGPT.Forms
                 if (tradeToDelete != null)
                 {
                     _temporaryTrades.Remove(tradeToDelete);
-                    _deletedTrades.Add(_deletedTrade); // Add back to deleted trades list
-                    Console.WriteLine($"Redo: Deleted trade {_deletedTrade.Symbol} on {_deletedTrade.Date:yyyy-MM-dd}");
+                    _deletedTrades.Add(tradeToDelete); // Add the actual trade found, not _deletedTrade
+                    Console.WriteLine($"Redo: Deleted trade {tradeToDelete.Symbol} on {tradeToDelete.Date:yyyy-MM-dd}");
+                }
+                else
+                {
+                    Console.WriteLine($"Redo: Trade {_deletedTrade.Symbol} not found in temporary state");
                 }
             }
             catch (Exception ex)
@@ -1261,6 +1278,10 @@ namespace TradingJournalGPT.Forms
 
                     Console.WriteLine($"Undo: Restored original values for trade {_originalTrade.Symbol}");
                 }
+                else
+                {
+                    Console.WriteLine($"Undo: Trade {_modifiedTrade.Symbol} not found in temporary state");
+                }
             }
             catch (Exception ex)
             {
@@ -1288,6 +1309,10 @@ namespace TradingJournalGPT.Forms
                     tradeToModify.Volume = _modifiedTrade.Volume;
 
                     Console.WriteLine($"Redo: Applied modified values for trade {_modifiedTrade.Symbol}");
+                }
+                else
+                {
+                    Console.WriteLine($"Redo: Trade {_originalTrade.Symbol} not found in temporary state");
                 }
             }
             catch (Exception ex)
