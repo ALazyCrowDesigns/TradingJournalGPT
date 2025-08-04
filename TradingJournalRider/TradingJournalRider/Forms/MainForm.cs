@@ -41,6 +41,9 @@ namespace TradingJournalGPT.Forms
             InitializeDataTable();
             InitializeTemporaryState();
             
+            // Handle form closing to check for unsaved changes
+            this.FormClosing += MainForm_FormClosing;
+            
             // Load initial data from storage
             _ = Task.Run(async () => 
             {
@@ -1050,7 +1053,7 @@ namespace TradingJournalGPT.Forms
 
         private void exitMenuItem_Click(object? sender, EventArgs e)
         {
-            Application.Exit();
+            CloseApplication();
         }
 
         private void undoMenuItem_Click(object? sender, EventArgs e)
@@ -1124,6 +1127,125 @@ namespace TradingJournalGPT.Forms
                 "About Trading Journal GPT",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
+        }
+
+        private void CloseApplication()
+        {
+            if (_hasUnsavedChanges)
+            {
+                var result = MessageBox.Show(
+                    "You have unsaved changes. Would you like to save them before closing?",
+                    "Unsaved Changes",
+                    MessageBoxButtons.YesNoCancel,
+                    MessageBoxIcon.Question);
+
+                switch (result)
+                {
+                    case DialogResult.Yes:
+                        // Save changes first, then close
+                        SaveChangesAndClose();
+                        break;
+                    case DialogResult.No:
+                        // Close without saving
+                        Application.Exit();
+                        break;
+                    case DialogResult.Cancel:
+                        // Cancel the close operation
+                        return;
+                }
+            }
+            else
+            {
+                // No unsaved changes, close directly
+                Application.Exit();
+            }
+        }
+
+        private async void SaveChangesAndClose()
+        {
+            try
+            {
+                Cursor = Cursors.WaitCursor;
+                _btnSaveChanges.Enabled = false;
+                _btnSaveChanges.Text = "Saving...";
+
+                // Save all temporary trades to storage
+                await _localStorageService.SaveTrades(_temporaryTrades);
+
+                // Clean up images for deleted trades (only when permanently saving)
+                if (_deletedTrades.Count > 0)
+                {
+                    var imageStorageService = new ImageStorageService();
+                    foreach (var deletedTrade in _deletedTrades)
+                    {
+                        if (!string.IsNullOrEmpty(deletedTrade.ChartImagePath))
+                        {
+                            if (imageStorageService.DeleteImage(deletedTrade.ChartImagePath))
+                            {
+                                Console.WriteLine($"Permanently deleted image: {deletedTrade.ChartImagePath}");
+                            }
+                            else
+                            {
+                                Console.WriteLine($"Warning: Could not delete image: {deletedTrade.ChartImagePath}");
+                            }
+                        }
+                    }
+                    _deletedTrades.Clear(); // Clear the deleted trades list
+                }
+
+                // Clear undo/redo stacks since changes are now permanent
+                _undoStack.Clear();
+                _redoStack.Clear();
+                UpdateUndoRedoMenuItems();
+
+                // Reset unsaved changes state
+                SetUnsavedChanges(false);
+
+                MessageBox.Show("Changes saved successfully! Closing application.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                
+                // Close the application
+                Application.Exit();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error saving changes: {ex.Message}\n\nApplication will close without saving.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Application.Exit();
+            }
+            finally
+            {
+                Cursor = Cursors.Default;
+                _btnSaveChanges.Enabled = true;
+                _btnSaveChanges.Text = "Save Changes";
+            }
+        }
+
+        private void MainForm_FormClosing(object? sender, FormClosingEventArgs e)
+        {
+            // If there are unsaved changes, prompt the user
+            if (_hasUnsavedChanges)
+            {
+                var result = MessageBox.Show(
+                    "You have unsaved changes. Would you like to save them before closing?",
+                    "Unsaved Changes",
+                    MessageBoxButtons.YesNoCancel,
+                    MessageBoxIcon.Question);
+
+                switch (result)
+                {
+                    case DialogResult.Yes:
+                        // Cancel the current close operation and save changes
+                        e.Cancel = true;
+                        SaveChangesAndClose();
+                        break;
+                    case DialogResult.No:
+                        // Allow the close operation to proceed without saving
+                        break;
+                    case DialogResult.Cancel:
+                        // Cancel the close operation
+                        e.Cancel = true;
+                        break;
+                }
+            }
         }
 
         #endregion
