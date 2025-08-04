@@ -1,5 +1,5 @@
 @echo off
-echo Starting Automatic Trading Journal...
+echo Starting Trading Journal...
 cd /d "%~dp0TradingJournalRider"
 dotnet run
 pause 

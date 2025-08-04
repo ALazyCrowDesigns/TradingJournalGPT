@@ -47,6 +47,24 @@ namespace TradingJournalGPT.Forms
             _tradingJournalService = new TradingJournalService();
             _localStorageService = new LocalStorageService();
             _floatDataService = new FloatDataService();
+            
+            // Load application icon
+            try
+            {
+                string iconPath = Path.Combine(Application.StartupPath, "Assets", "Icon", "TradingJournalIcon.png");
+                if (File.Exists(iconPath))
+                {
+                    using (var bitmap = new Bitmap(iconPath))
+                    {
+                        this.Icon = Icon.FromHandle(bitmap.GetHicon());
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Could not load application icon: {ex.Message}");
+            }
+            
             InitializeDataTable();
             InitializeTemporaryState();
             

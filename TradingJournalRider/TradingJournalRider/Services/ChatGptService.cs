@@ -24,85 +24,48 @@ namespace TradingJournalGPT.Services
                 var imageBytes = await File.ReadAllBytesAsync(imagePath);
                 var imageBase64 = Convert.ToBase64String(imageBytes);
 
-                // Create the prompt for chart analysis
-                                       var prompt = @"Don't use online data, look at this chart, give me the date, the name of the stock, the High after volume surge, the low after volume surge, and the previous day close, then give me the %gap of yesterday's close to the high after volume surge, and the high to the new low. Also extract the volume traded for the day in millions of shares (if it shows 10 million shares traded, return 10).
+                // First prompt: Extract chart data
+                var firstPrompt = @"Look at this chart and extract ONLY the stock name, date, post volume surge high, and new low after that volume surge high.
 
-                Please return this information in JSON format:
+                Return ONLY this JSON format with actual numbers (not null):
                 {
                     ""symbol"": ""stock symbol"",
                     ""date"": ""YYYY-MM-DD"",
-                    ""highAfterVolumeSurge"": decimal,
-                    ""lowAfterVolumeSurge"": decimal,
-                                           ""previousDayClose"": decimal,
-                       ""gapPercentToHigh"": decimal,
-                       ""gapPercentHighToLow"": decimal,
-                       ""volume"": decimal
+                    ""highAfterVolumeSurge"": 0.00,
+                    ""lowAfterVolumeSurge"": 0.00
                 }
 
-                Focus on:
-                - Stock symbol from the chart
-                - Date shown on the chart
-                - High price after volume surge
-                - Low price after volume surge  
-                - Previous day's closing price
-                                   - Calculate % gap from yesterday's close to high after volume surge
-                   - Calculate % gap from high to new low
-                   - Extract volume traded for the day in millions of shares
+                IMPORTANT: Use the high and low AFTER the volume surge, not the day's HOD/LOD. All numeric values must be actual numbers, not null.";
 
-                Return only the JSON object, no additional text.";
+                // First API call
+                var firstResponse = await CallChatGptApi(firstPrompt, imageBase64);
+                var chartData = ParseChartDataFromResponse(firstResponse);
 
-                // Create the request payload for OpenAI API
-                var requestPayload = new
-                {
-                    model = "gpt-4o",
-                    messages = new object[]
-                    {
-                        new
-                        {
-                            role = "user",
-                            content = new object[]
-                            {
-                                new
-                                {
-                                    type = "text",
-                                    text = prompt
-                                },
-                                new
-                                {
-                                    type = "image_url",
-                                    image_url = new
-                                    {
-                                        url = $"data:image/png;base64,{imageBase64}"
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    max_tokens = 1000
-                };
+                // Second prompt: Get online data
+                var secondPrompt = $@"Using online sources, get the volume traded and previous day close for {chartData.Symbol} on {chartData.Date:yyyy-MM-dd}.
 
-                // Serialize the request
-                var jsonRequest = JsonSerializer.Serialize(requestPayload);
-                var content = new StringContent(jsonRequest, Encoding.UTF8, "application/json");
+                Chart data from first analysis:
+                - Symbol: {chartData.Symbol}
+                - Date: {chartData.Date:yyyy-MM-dd}
+                - Post volume surge high: {chartData.HighAfterVolumeSurge}
+                - Post volume surge low: {chartData.LowAfterVolumeSurge}
 
-                // Call the OpenAI API
-                var response = await _httpClient.PostAsync("https://api.openai.com/v1/chat/completions", content);
-                var responseText = await response.Content.ReadAsStringAsync();
+                Return ONLY this JSON format with actual numbers (not null):
+                {{
+                    ""previousDayClose"": 0.00,
+                    ""volume"": 0.00
+                }}
 
-                if (!response.IsSuccessStatusCode)
-                {
-                    throw new Exception($"OpenAI API error: {response.StatusCode} - {responseText}");
-                }
+                Get:
+                - previousDayClose: previous day's closing price
+                - volume: total volume traded that day (in millions of shares)";
 
-                // Parse the response
-                using var responseDoc = JsonDocument.Parse(responseText);
-                var choices = responseDoc.RootElement.GetProperty("choices");
-                var firstChoice = choices[0];
-                var message = firstChoice.GetProperty("message");
-                var contentText = message.GetProperty("content").GetString() ?? "";
+                // Second API call
+                var secondResponse = await CallChatGptApi(secondPrompt, imageBase64);
+                var onlineData = ParseOnlineDataFromResponse(secondResponse);
 
-                // Parse the JSON response
-                return ParseTradeDataFromResponse(contentText);
+                // Combine the data
+                return CombineTradeData(chartData, onlineData);
             }
             catch (Exception ex)
             {
@@ -110,11 +73,59 @@ namespace TradingJournalGPT.Services
             }
         }
 
-        private TradeData ParseTradeDataFromResponse(string responseText)
+        private async Task<string> CallChatGptApi(string prompt, string imageBase64)
+        {
+            var requestPayload = new
+            {
+                model = "gpt-4o",
+                messages = new object[]
+                {
+                    new
+                    {
+                        role = "user",
+                        content = new object[]
+                        {
+                            new
+                            {
+                                type = "text",
+                                text = prompt
+                            },
+                            new
+                            {
+                                type = "image_url",
+                                image_url = new
+                                {
+                                    url = $"data:image/png;base64,{imageBase64}"
+                                }
+                            }
+                        }
+                    }
+                },
+                max_tokens = 1000
+            };
+
+            var jsonRequest = JsonSerializer.Serialize(requestPayload);
+            var content = new StringContent(jsonRequest, Encoding.UTF8, "application/json");
+
+            var response = await _httpClient.PostAsync("https://api.openai.com/v1/chat/completions", content);
+            var responseText = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new Exception($"OpenAI API error: {response.StatusCode} - {responseText}");
+            }
+
+            using var responseDoc = JsonDocument.Parse(responseText);
+            var choices = responseDoc.RootElement.GetProperty("choices");
+            var firstChoice = choices[0];
+            var message = firstChoice.GetProperty("message");
+            return message.GetProperty("content").GetString() ?? "";
+        }
+
+        private ChartData ParseChartDataFromResponse(string responseText)
         {
             try
             {
-                // Clean up the response text to extract JSON
                 var jsonStart = responseText.IndexOf('{');
                 var jsonEnd = responseText.LastIndexOf('}') + 1;
                 
@@ -124,42 +135,102 @@ namespace TradingJournalGPT.Services
                 }
 
                 var jsonText = responseText.Substring(jsonStart, jsonEnd - jsonStart);
-                
-                // Parse JSON using System.Text.Json
                 using var document = System.Text.Json.JsonDocument.Parse(jsonText);
                 var root = document.RootElement;
 
-                var tradeData = new TradeData
+                return new ChartData
                 {
                     Symbol = GetStringValue(root, "symbol"),
                     Date = GetDateTimeValue(root, "date"),
                     HighAfterVolumeSurge = GetDecimalValue(root, "highAfterVolumeSurge"),
-                    LowAfterVolumeSurge = GetDecimalValue(root, "lowAfterVolumeSurge"),
-                    PreviousDayClose = GetDecimalValue(root, "previousDayClose"),
-                    GapPercentToHigh = GetDecimalValue(root, "gapPercentToHigh"),
-                    GapPercentHighToLow = Math.Abs(GetDecimalValue(root, "gapPercentHighToLow")),
-                    Volume = (long)(GetDecimalValue(root, "volume") * 1000000), // Convert millions to actual volume
-                    Analysis = "" // No longer needed
+                    LowAfterVolumeSurge = GetDecimalValue(root, "lowAfterVolumeSurge")
                 };
-
-                // Set legacy fields for backward compatibility
-                tradeData.EntryDate = tradeData.Date;
-                tradeData.ExitDate = tradeData.Date;
-                tradeData.EntryPrice = tradeData.PreviousDayClose;
-                tradeData.ExitPrice = tradeData.LowAfterVolumeSurge;
-                tradeData.PositionSize = 1000; // Default position size
-                tradeData.TradeType = "Analysis";
-                tradeData.ProfitLoss = 0; // Not applicable for this analysis
-                
-
-
-                return tradeData;
             }
             catch (Exception ex)
             {
-                throw new Exception($"Error parsing ChatGPT response: {ex.Message}");
+                throw new Exception($"Error parsing chart data response: {ex.Message}");
             }
         }
+
+        private OnlineData ParseOnlineDataFromResponse(string responseText)
+        {
+            try
+            {
+                var jsonStart = responseText.IndexOf('{');
+                var jsonEnd = responseText.LastIndexOf('}') + 1;
+                
+                if (jsonStart == -1 || jsonEnd == 0)
+                {
+                    throw new Exception("Could not find JSON in response");
+                }
+
+                var jsonText = responseText.Substring(jsonStart, jsonEnd - jsonStart);
+                using var document = System.Text.Json.JsonDocument.Parse(jsonText);
+                var root = document.RootElement;
+
+                return new OnlineData
+                {
+                    PreviousDayClose = GetDecimalValue(root, "previousDayClose"),
+                    Volume = GetDecimalValue(root, "volume")
+                };
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error parsing online data response: {ex.Message}");
+            }
+        }
+
+        private TradeData CombineTradeData(ChartData chartData, OnlineData onlineData)
+        {
+            // Calculate gap percentages locally
+            var gapPercentToHigh = onlineData.PreviousDayClose > 0 
+                ? ((chartData.HighAfterVolumeSurge - onlineData.PreviousDayClose) / onlineData.PreviousDayClose) * 100 
+                : 0m;
+            
+            var gapPercentHighToLow = chartData.HighAfterVolumeSurge > 0 
+                ? ((chartData.LowAfterVolumeSurge - chartData.HighAfterVolumeSurge) / chartData.HighAfterVolumeSurge) * 100 
+                : 0m;
+
+            var tradeData = new TradeData
+            {
+                Symbol = chartData.Symbol,
+                Date = chartData.Date,
+                HighAfterVolumeSurge = chartData.HighAfterVolumeSurge,
+                LowAfterVolumeSurge = chartData.LowAfterVolumeSurge,
+                PreviousDayClose = onlineData.PreviousDayClose,
+                GapPercentToHigh = gapPercentToHigh,
+                GapPercentHighToLow = Math.Abs(gapPercentHighToLow),
+                Volume = (long)(onlineData.Volume * 1000000), // Convert millions to actual volume
+                Analysis = ""
+            };
+
+            // Set legacy fields for backward compatibility
+            tradeData.EntryDate = tradeData.Date;
+            tradeData.ExitDate = tradeData.Date;
+            tradeData.EntryPrice = tradeData.PreviousDayClose;
+            tradeData.ExitPrice = tradeData.LowAfterVolumeSurge;
+            tradeData.PositionSize = 1000;
+            tradeData.TradeType = "Analysis";
+            tradeData.ProfitLoss = 0;
+
+            return tradeData;
+        }
+
+        private class ChartData
+        {
+            public string Symbol { get; set; } = "";
+            public DateTime Date { get; set; }
+            public decimal HighAfterVolumeSurge { get; set; }
+            public decimal LowAfterVolumeSurge { get; set; }
+        }
+
+        private class OnlineData
+        {
+            public decimal PreviousDayClose { get; set; }
+            public decimal Volume { get; set; }
+        }
+
+
 
         private string GetStringValue(System.Text.Json.JsonElement element, string propertyName)
         {
@@ -168,7 +239,13 @@ namespace TradingJournalGPT.Services
 
         private decimal GetDecimalValue(System.Text.Json.JsonElement element, string propertyName)
         {
-            return element.TryGetProperty(propertyName, out var prop) ? prop.GetDecimal() : 0m;
+            if (!element.TryGetProperty(propertyName, out var prop))
+                return 0m;
+            
+            if (prop.ValueKind == JsonValueKind.Null)
+                return 0m;
+                
+            return prop.GetDecimal();
         }
 
         private int GetIntValue(System.Text.Json.JsonElement element, string propertyName)
