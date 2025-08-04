@@ -40,7 +40,13 @@ namespace TradingJournalGPT.Forms
             _localStorageService = new LocalStorageService();
             InitializeDataTable();
             InitializeTemporaryState();
-            LoadRecentTrades();
+            
+            // Load initial data from storage
+            _ = Task.Run(async () => 
+            {
+                await Task.Delay(100); // Small delay to ensure UI is ready
+                this.Invoke(() => LoadRecentTrades());
+            });
         }
 
         private void InitializeDataTable()
@@ -92,10 +98,39 @@ namespace TradingJournalGPT.Forms
             {
                 Cursor = Cursors.WaitCursor;
                 
-                // If we have temporary trades, use those; otherwise load from storage
-                if (_temporaryTrades.Count == 0)
+                // Always load from storage to get the latest data
+                var storageTrades = await _tradingJournalService.GetRecentTrades(50, true);
+                
+                // If we have unsaved changes, merge with temporary state
+                if (_hasUnsavedChanges)
                 {
-                    _temporaryTrades = await _tradingJournalService.GetRecentTrades(50, true);
+                    // Keep temporary trades and merge with new storage trades
+                    var mergedTrades = new List<TradeData>();
+                    
+                    // Add all storage trades that aren't in deleted list
+                    foreach (var storageTrade in storageTrades)
+                    {
+                        var isDeleted = _deletedTrades.Any(d => 
+                            d.Symbol == storageTrade.Symbol && 
+                            d.Date.Date == storageTrade.Date.Date &&
+                            d.TradeSeq == storageTrade.TradeSeq);
+                        
+                        if (!isDeleted)
+                        {
+                            mergedTrades.Add(storageTrade);
+                        }
+                    }
+                    
+                    // Add temporary trades (which include edits)
+                    mergedTrades.AddRange(_temporaryTrades);
+                    
+                    // Update temporary trades with merged result
+                    _temporaryTrades = mergedTrades;
+                }
+                else
+                {
+                    // No unsaved changes, just use storage data
+                    _temporaryTrades = storageTrades;
                 }
                 
                 _tradesDataTable.Clear();
@@ -209,8 +244,27 @@ namespace TradingJournalGPT.Forms
                     if (dialogResult == DialogResult.OK)
                     {
                         Console.WriteLine($"Recording trade with SaveLocally: {resultForm.SaveLocally}");
-                        // Record the trade
-                        await _tradingJournalService.RecordTrade(tradeData, resultForm.SaveLocally);
+                        
+                        if (resultForm.SaveLocally)
+                        {
+                            // Save to local storage
+                            await _tradingJournalService.RecordTrade(tradeData, true);
+                            
+                            // Add to temporary state for immediate display
+                            _temporaryTrades.Add(tradeData);
+                            
+                            Console.WriteLine("Trade recorded to local storage and added to temporary state");
+                        }
+                        else
+                        {
+                            // Save to Google Sheets
+                            await _tradingJournalService.RecordTrade(tradeData, false);
+                            
+                            // Add to temporary state for immediate display
+                            _temporaryTrades.Add(tradeData);
+                            
+                            Console.WriteLine("Trade recorded to Google Sheets and added to temporary state");
+                        }
                         
                         Console.WriteLine("Trade recorded, refreshing data table...");
                         // Refresh the data table
@@ -278,6 +332,9 @@ namespace TradingJournalGPT.Forms
                         
                         // Record the trade automatically to local storage
                         await _tradingJournalService.RecordTrade(tradeData, true); // true = use local storage
+                        
+                        // Add to temporary state for immediate display
+                        _temporaryTrades.Add(tradeData);
                         recordedCount++;
                     }
                     catch (Exception ex)
@@ -314,6 +371,13 @@ namespace TradingJournalGPT.Forms
 
         private void btnRefresh_Click(object? sender, EventArgs e)
         {
+            // Force reload from storage by clearing temporary state if no unsaved changes
+            if (!_hasUnsavedChanges)
+            {
+                _temporaryTrades.Clear();
+                _deletedTrades.Clear();
+            }
+            
             LoadRecentTrades();
             RefreshThumbnails();
         }
@@ -847,8 +911,11 @@ namespace TradingJournalGPT.Forms
                     _redoStack.Clear();
                     UpdateUndoRedoMenuItems();
 
-                    // Reset unsaved changes state
+                    // Reset unsaved changes state and reload from storage
                     SetUnsavedChanges(false);
+                    
+                    // Reload from storage to ensure consistency
+                    LoadRecentTrades();
 
                     MessageBox.Show("Changes saved successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
