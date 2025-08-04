@@ -28,6 +28,7 @@ namespace TradingJournalGPT.Forms
         
         // Temporary state management
         private List<TradeData> _temporaryTrades = new List<TradeData>();
+        private List<TradeData> _deletedTrades = new List<TradeData>(); // Track deleted trades for image cleanup
         private bool _hasUnsavedChanges = false;
         private Button _btnSaveChanges = null!;
         private Label _lblUnsavedChanges = null!;
@@ -110,7 +111,7 @@ namespace TradingJournalGPT.Forms
                         trade.GapPercentToHigh,
                         trade.GapPercentHighToLow,
                         trade.Volume / 1000000m,
-                        "View Chart"
+                        trade.ChartImagePath ?? "No Image"
                     );
                 }
             }
@@ -439,8 +440,11 @@ namespace TradingJournalGPT.Forms
                     if (tradeToDelete != null)
                     {
                         // Create undo action for temporary state
-                        var undoAction = new DeleteTradeAction(tradeToDelete, _temporaryTrades);
+                        var undoAction = new DeleteTradeAction(tradeToDelete, _temporaryTrades, _deletedTrades);
                         AddUndoAction(undoAction);
+
+                        // Track deleted trade for image cleanup
+                        _deletedTrades.Add(tradeToDelete);
 
                         // Remove from temporary state
                         _temporaryTrades.Remove(tradeToDelete);
@@ -452,6 +456,10 @@ namespace TradingJournalGPT.Forms
                         SetUnsavedChanges(true);
 
                         MessageBox.Show("Trade deleted successfully! (Changes are temporary until saved)", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    else
+                    {
+                        MessageBox.Show("Trade not found in temporary state. Please refresh and try again.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     }
                 }
                 catch (Exception ex)
@@ -820,6 +828,20 @@ namespace TradingJournalGPT.Forms
                     // Save all temporary trades to storage
                     await _localStorageService.SaveTrades(_temporaryTrades);
 
+                    // Clean up images for deleted trades
+                    if (_deletedTrades.Count > 0)
+                    {
+                        var imageStorageService = new ImageStorageService();
+                        foreach (var deletedTrade in _deletedTrades)
+                        {
+                            if (!string.IsNullOrEmpty(deletedTrade.ChartImagePath))
+                            {
+                                imageStorageService.DeleteImage(deletedTrade.ChartImagePath);
+                            }
+                        }
+                        _deletedTrades.Clear(); // Clear the deleted trades list
+                    }
+
                     // Clear undo/redo stacks since changes are now permanent
                     _undoStack.Clear();
                     _redoStack.Clear();
@@ -1075,11 +1097,13 @@ namespace TradingJournalGPT.Forms
     {
         private readonly TradeData _deletedTrade;
         private readonly List<TradeData> _temporaryTrades;
+        private readonly List<TradeData> _deletedTrades;
 
-        public DeleteTradeAction(TradeData deletedTrade, List<TradeData> temporaryTrades)
+        public DeleteTradeAction(TradeData deletedTrade, List<TradeData> temporaryTrades, List<TradeData> deletedTrades)
         {
             _deletedTrade = deletedTrade;
             _temporaryTrades = temporaryTrades;
+            _deletedTrades = deletedTrades;
         }
 
         public override void Undo()
@@ -1087,6 +1111,7 @@ namespace TradingJournalGPT.Forms
             try
             {
                 _temporaryTrades.Add(_deletedTrade);
+                _deletedTrades.Remove(_deletedTrade); // Remove from deleted trades list
                 Console.WriteLine($"Undo: Restored trade {_deletedTrade.Symbol} on {_deletedTrade.Date:yyyy-MM-dd}");
             }
             catch (Exception ex)
@@ -1107,6 +1132,7 @@ namespace TradingJournalGPT.Forms
                 if (tradeToDelete != null)
                 {
                     _temporaryTrades.Remove(tradeToDelete);
+                    _deletedTrades.Add(_deletedTrade); // Add back to deleted trades list
                     Console.WriteLine($"Redo: Deleted trade {_deletedTrade.Symbol} on {_deletedTrade.Date:yyyy-MM-dd}");
                 }
             }
