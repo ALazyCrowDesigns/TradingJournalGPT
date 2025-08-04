@@ -361,7 +361,7 @@ namespace TradingJournalGPT.Forms
             // 
             this.progressBar.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.progressBar.Location = new System.Drawing.Point(12, 8);
+            this.progressBar.Location = new System.Drawing.Point(12, 60);
             this.progressBar.Name = "progressBar";
             this.progressBar.Size = new System.Drawing.Size(1200, 23);
             this.progressBar.TabIndex = 4;
@@ -373,7 +373,7 @@ namespace TradingJournalGPT.Forms
             | System.Windows.Forms.AnchorStyles.Right)));
             this.lblStatus.AutoSize = true;
             this.lblStatus.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
-            this.lblStatus.Location = new System.Drawing.Point(12, 30);
+            this.lblStatus.Location = new System.Drawing.Point(12, 85);
             this.lblStatus.Name = "lblStatus";
             this.lblStatus.Size = new System.Drawing.Size(38, 15);
             this.lblStatus.TabIndex = 5;
@@ -382,33 +382,33 @@ namespace TradingJournalGPT.Forms
             // panelTop
             // 
             this.panelTop.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(240)))), ((int)(((byte)(240)))), ((int)(((byte)(240)))));
-            this.panelTop.Controls.Add(this.lblStatus);
-            this.panelTop.Controls.Add(this.progressBar);
             this.panelTop.Dock = System.Windows.Forms.DockStyle.Top;
             this.panelTop.Location = new System.Drawing.Point(0, 24);
             this.panelTop.Name = "panelTop";
-            this.panelTop.Size = new System.Drawing.Size(800, 50);
+            this.panelTop.Size = new System.Drawing.Size(800, 0);
             this.panelTop.TabIndex = 6;
             // 
             // panelBottom
             // 
             this.panelBottom.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(240)))), ((int)(((byte)(240)))), ((int)(((byte)(240)))));
+            this.panelBottom.Controls.Add(this.lblStatus);
+            this.panelBottom.Controls.Add(this.progressBar);
             this.panelBottom.Controls.Add(this.btnAnalyzeChartImage);
             this.panelBottom.Controls.Add(this.btnAnalyzeChartFolder);
             this.panelBottom.Controls.Add(this.btnRefresh);
             this.panelBottom.Dock = System.Windows.Forms.DockStyle.Bottom;
             this.panelBottom.Location = new System.Drawing.Point(0, 479);
             this.panelBottom.Name = "panelBottom";
-            this.panelBottom.Size = new System.Drawing.Size(800, 71);
+            this.panelBottom.Size = new System.Drawing.Size(800, 100);
             this.panelBottom.TabIndex = 7;
             // 
             // panelMain
             // 
             this.panelMain.Controls.Add(this.dataGridViewTrades);
             this.panelMain.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.panelMain.Location = new System.Drawing.Point(0, 50);
+            this.panelMain.Location = new System.Drawing.Point(0, 24);
             this.panelMain.Name = "panelMain";
-            this.panelMain.Size = new System.Drawing.Size(800, 429);
+            this.panelMain.Size = new System.Drawing.Size(800, 455);
             this.panelMain.TabIndex = 8;
             // 
             // MainForm
