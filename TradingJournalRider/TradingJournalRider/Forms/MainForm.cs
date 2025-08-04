@@ -543,7 +543,7 @@ namespace TradingJournalGPT.Forms
                         var undoAction = new DeleteTradeAction(tradeToDelete, _temporaryTrades, _deletedTrades);
                         AddUndoAction(undoAction);
 
-                        // Track deleted trade for image cleanup
+                        // Track deleted trade for image cleanup (but don't delete image yet - only when saving)
                         _deletedTrades.Add(tradeToDelete);
 
                         // Remove from temporary state
@@ -934,19 +934,26 @@ namespace TradingJournalGPT.Forms
                     // Save all temporary trades to storage
                     await _localStorageService.SaveTrades(_temporaryTrades);
 
-                    // Clean up images for deleted trades
-                    if (_deletedTrades.Count > 0)
-                    {
-                        var imageStorageService = new ImageStorageService();
-                        foreach (var deletedTrade in _deletedTrades)
-                        {
-                            if (!string.IsNullOrEmpty(deletedTrade.ChartImagePath))
-                            {
-                                imageStorageService.DeleteImage(deletedTrade.ChartImagePath);
-                            }
-                        }
-                        _deletedTrades.Clear(); // Clear the deleted trades list
-                    }
+                                         // Clean up images for deleted trades (only when permanently saving)
+                     if (_deletedTrades.Count > 0)
+                     {
+                         var imageStorageService = new ImageStorageService();
+                         foreach (var deletedTrade in _deletedTrades)
+                         {
+                             if (!string.IsNullOrEmpty(deletedTrade.ChartImagePath))
+                             {
+                                 if (imageStorageService.DeleteImage(deletedTrade.ChartImagePath))
+                                 {
+                                     Console.WriteLine($"Permanently deleted image: {deletedTrade.ChartImagePath}");
+                                 }
+                                 else
+                                 {
+                                     Console.WriteLine($"Warning: Could not delete image: {deletedTrade.ChartImagePath}");
+                                 }
+                             }
+                         }
+                         _deletedTrades.Clear(); // Clear the deleted trades list
+                     }
 
                     // Clear undo/redo stacks since changes are now permanent
                     _undoStack.Clear();
@@ -1229,7 +1236,7 @@ namespace TradingJournalGPT.Forms
                 {
                     _temporaryTrades.Add(_deletedTrade);
                     _deletedTrades.Remove(_deletedTrade); // Remove from deleted trades list
-                    Console.WriteLine($"Undo: Restored trade {_deletedTrade.Symbol} on {_deletedTrade.Date:yyyy-MM-dd}");
+                    Console.WriteLine($"Undo: Restored trade {_deletedTrade.Symbol} on {_deletedTrade.Date:yyyy-MM-dd} (image file preserved)");
                 }
                 else
                 {
