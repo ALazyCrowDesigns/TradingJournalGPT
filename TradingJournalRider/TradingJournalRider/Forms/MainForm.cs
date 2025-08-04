@@ -21,10 +21,16 @@ namespace TradingJournalGPT.Forms
         private bool _isProcessing = false;
         private ContextMenuStrip _contextMenu = null!;
         
-        // Undo/Redo system
+        // Enhanced Undo/Redo system with temporary state
         private readonly Stack<UndoRedoAction> _undoStack = new Stack<UndoRedoAction>();
         private readonly Stack<UndoRedoAction> _redoStack = new Stack<UndoRedoAction>();
         private bool _isUndoRedoAction = false;
+        
+        // Temporary state management
+        private List<TradeData> _temporaryTrades = new List<TradeData>();
+        private bool _hasUnsavedChanges = false;
+        private Button _btnSaveChanges = null!;
+        private Label _lblUnsavedChanges = null!;
 
         public MainForm()
         {
@@ -32,6 +38,7 @@ namespace TradingJournalGPT.Forms
             _tradingJournalService = new TradingJournalService();
             _localStorageService = new LocalStorageService();
             InitializeDataTable();
+            InitializeTemporaryState();
             LoadRecentTrades();
         }
 
@@ -83,10 +90,15 @@ namespace TradingJournalGPT.Forms
             try
             {
                 Cursor = Cursors.WaitCursor;
-                var trades = await _tradingJournalService.GetRecentTrades(50, true); // Use local storage
+                
+                // If we have temporary trades, use those; otherwise load from storage
+                if (_temporaryTrades.Count == 0)
+                {
+                    _temporaryTrades = await _tradingJournalService.GetRecentTrades(50, true);
+                }
                 
                 _tradesDataTable.Clear();
-                foreach (var trade in trades)
+                foreach (var trade in _temporaryTrades)
                 {
                     _tradesDataTable.Rows.Add(
                         trade.Symbol,
@@ -98,7 +110,7 @@ namespace TradingJournalGPT.Forms
                         trade.GapPercentToHigh,
                         trade.GapPercentHighToLow,
                         trade.Volume / 1000000m,
-                        trade.ChartImagePath ?? "" // Store the image path for thumbnail display
+                        "View Chart"
                     );
                 }
             }
@@ -364,7 +376,7 @@ namespace TradingJournalGPT.Forms
             CleanupOrphanedImages();
         }
 
-        private async void DataGridViewTrades_CellEndEdit(object? sender, DataGridViewCellEventArgs e)
+        private void DataGridViewTrades_CellEndEdit(object? sender, DataGridViewCellEventArgs e)
         {
             try
             {
@@ -381,8 +393,8 @@ namespace TradingJournalGPT.Forms
                         }
                     }
                     
-                    // Update the local storage with the edited data
-                    await UpdateTradeInStorage(e.RowIndex);
+                    // Update the temporary state with the edited data
+                    UpdateTradeInStorage(e.RowIndex);
                 }
             }
             catch (Exception ex)
@@ -399,7 +411,7 @@ namespace TradingJournalGPT.Forms
             }
         }
 
-        private async void DeleteSelectedRow()
+        private void DeleteSelectedRow()
         {
             if (dataGridViewTrades.SelectedRows.Count == 0) return;
 
@@ -418,28 +430,29 @@ namespace TradingJournalGPT.Forms
                     var date = selectedRow.Cells["Date"].Value?.ToString();
                     var tradeSeq = Convert.ToInt32(selectedRow.Cells["Trade Seq"].Value ?? 0);
 
-                    // Get the trade data before deletion for undo
-                    var trades = await _tradingJournalService.GetRecentTrades(50, true);
-                    var tradeToDelete = trades.FirstOrDefault(t => 
+                    // Find the trade in temporary state
+                    var tradeToDelete = _temporaryTrades.FirstOrDefault(t => 
                         t.Symbol == symbol && 
                         t.Date.ToString("yyyy-MM-dd") == date &&
                         t.TradeSeq == tradeSeq);
 
                     if (tradeToDelete != null)
                     {
-                        // Create undo action
-                        var imageStorageService = new ImageStorageService();
-                        var undoAction = new DeleteTradeAction(tradeToDelete, _localStorageService, imageStorageService);
+                        // Create undo action for temporary state
+                        var undoAction = new DeleteTradeAction(tradeToDelete, _temporaryTrades);
                         AddUndoAction(undoAction);
+
+                        // Remove from temporary state
+                        _temporaryTrades.Remove(tradeToDelete);
+
+                        // Remove from data table
+                        dataGridViewTrades.Rows.Remove(selectedRow);
+
+                        // Mark as having unsaved changes
+                        SetUnsavedChanges(true);
+
+                        MessageBox.Show("Trade deleted successfully! (Changes are temporary until saved)", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
-
-                    // Remove from local storage
-                    await DeleteTradeFromStorage(symbol ?? "", date ?? "", tradeSeq);
-
-                    // Remove from data table
-                    dataGridViewTrades.Rows.Remove(selectedRow);
-
-                    MessageBox.Show("Trade deleted successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception ex)
                 {
@@ -448,14 +461,12 @@ namespace TradingJournalGPT.Forms
             }
         }
 
-        private async Task UpdateTradeInStorage(int rowIndex)
+        private void UpdateTradeInStorage(int rowIndex)
         {
             try
             {
-                var trades = await _tradingJournalService.GetRecentTrades(50, true);
                 var symbol = dataGridViewTrades.Rows[rowIndex].Cells["Symbol"].Value?.ToString();
                 var date = dataGridViewTrades.Rows[rowIndex].Cells["Date"].Value?.ToString();
-
                 var tradeSeq = Convert.ToInt32(dataGridViewTrades.Rows[rowIndex].Cells["Trade Seq"].Value ?? 0);
                 
                 // Parse the date string properly
@@ -466,7 +477,7 @@ namespace TradingJournalGPT.Forms
                     return;
                 }
                 
-                var tradeToUpdate = trades.FirstOrDefault(t => 
+                var tradeToUpdate = _temporaryTrades.FirstOrDefault(t => 
                     t.Symbol == symbol && 
                     t.Date.Date == parsedDate.Date &&
                     t.TradeSeq == tradeSeq);
@@ -525,16 +536,16 @@ namespace TradingJournalGPT.Forms
                         ChartImagePath = tradeToUpdate.ChartImagePath
                     };
 
-                    var undoAction = new EditTradeAction(originalTrade, modifiedTrade, _localStorageService);
+                    var undoAction = new EditTradeAction(originalTrade, modifiedTrade, _temporaryTrades);
                     AddUndoAction(undoAction);
 
-                    // Save updated trades
-                    await _localStorageService.SaveTrades(trades);
+                    // Mark as having unsaved changes
+                    SetUnsavedChanges(true);
                 }
             }
             catch (Exception ex)
             {
-                throw new Exception($"Error updating trade in storage: {ex.Message}");
+                throw new Exception($"Error updating trade in temporary state: {ex.Message}");
             }
         }
 
@@ -740,6 +751,98 @@ namespace TradingJournalGPT.Forms
             }
         }
 
+        private void InitializeTemporaryState()
+        {
+            // Create save button
+            _btnSaveChanges = new Button
+            {
+                Text = "Save Changes",
+                BackColor = Color.FromArgb(40, 167, 69),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                Size = new Size(120, 30),
+                Location = new Point(800, 12),
+                Visible = false
+            };
+            _btnSaveChanges.Click += BtnSaveChanges_Click;
+
+            // Create unsaved changes label
+            _lblUnsavedChanges = new Label
+            {
+                Text = "⚠️ Unsaved Changes",
+                ForeColor = Color.Orange,
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                AutoSize = true,
+                Location = new Point(12, 85),
+                Visible = false
+            };
+
+            // Add controls to bottom panel
+            panelBottom.Controls.Add(_btnSaveChanges);
+            panelBottom.Controls.Add(_lblUnsavedChanges);
+        }
+
+        private void SetUnsavedChanges(bool hasChanges)
+        {
+            _hasUnsavedChanges = hasChanges;
+            _btnSaveChanges.Visible = hasChanges;
+            _lblUnsavedChanges.Visible = hasChanges;
+            
+            // Update window title to show unsaved changes
+            if (hasChanges)
+            {
+                if (!Text.EndsWith(" *"))
+                    Text += " *";
+            }
+            else
+            {
+                Text = Text.Replace(" *", "");
+            }
+        }
+
+        private async void BtnSaveChanges_Click(object? sender, EventArgs e)
+        {
+            var result = MessageBox.Show(
+                "Are you sure you want to save all changes? This will permanently update your trade data.",
+                "Confirm Save",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+
+            if (result == DialogResult.Yes)
+            {
+                try
+                {
+                    Cursor = Cursors.WaitCursor;
+                    _btnSaveChanges.Enabled = false;
+                    _btnSaveChanges.Text = "Saving...";
+
+                    // Save all temporary trades to storage
+                    await _localStorageService.SaveTrades(_temporaryTrades);
+
+                    // Clear undo/redo stacks since changes are now permanent
+                    _undoStack.Clear();
+                    _redoStack.Clear();
+                    UpdateUndoRedoMenuItems();
+
+                    // Reset unsaved changes state
+                    SetUnsavedChanges(false);
+
+                    MessageBox.Show("Changes saved successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error saving changes: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+                finally
+                {
+                    Cursor = Cursors.Default;
+                    _btnSaveChanges.Enabled = true;
+                    _btnSaveChanges.Text = "Save Changes";
+                }
+            }
+        }
+
         #region Menu Event Handlers
 
         private void newTradeMenuItem_Click(object? sender, EventArgs e)
@@ -887,7 +990,10 @@ namespace TradingJournalGPT.Forms
                 _redoStack.Push(action);
                 _isUndoRedoAction = false;
                 UpdateUndoRedoMenuItems();
-                LoadRecentTrades(); // Refresh the display
+                
+                // Refresh the display and mark as having unsaved changes
+                LoadRecentTrades();
+                SetUnsavedChanges(true);
             }
         }
 
@@ -901,7 +1007,10 @@ namespace TradingJournalGPT.Forms
                 _undoStack.Push(action);
                 _isUndoRedoAction = false;
                 UpdateUndoRedoMenuItems();
-                LoadRecentTrades(); // Refresh the display
+                
+                // Refresh the display and mark as having unsaved changes
+                LoadRecentTrades();
+                SetUnsavedChanges(true);
             }
         }
 
@@ -965,23 +1074,19 @@ namespace TradingJournalGPT.Forms
     public class DeleteTradeAction : UndoRedoAction
     {
         private readonly TradeData _deletedTrade;
-        private readonly LocalStorageService _localStorageService;
-        private readonly ImageStorageService _imageStorageService;
+        private readonly List<TradeData> _temporaryTrades;
 
-        public DeleteTradeAction(TradeData deletedTrade, LocalStorageService localStorageService, ImageStorageService imageStorageService)
+        public DeleteTradeAction(TradeData deletedTrade, List<TradeData> temporaryTrades)
         {
             _deletedTrade = deletedTrade;
-            _localStorageService = localStorageService;
-            _imageStorageService = imageStorageService;
+            _temporaryTrades = temporaryTrades;
         }
 
-        public override async void Undo()
+        public override void Undo()
         {
             try
             {
-                var trades = await _localStorageService.GetRecentTrades(1000);
-                trades.Add(_deletedTrade);
-                await _localStorageService.SaveTrades(trades);
+                _temporaryTrades.Add(_deletedTrade);
                 Console.WriteLine($"Undo: Restored trade {_deletedTrade.Symbol} on {_deletedTrade.Date:yyyy-MM-dd}");
             }
             catch (Exception ex)
@@ -990,26 +1095,18 @@ namespace TradingJournalGPT.Forms
             }
         }
 
-        public override async void Redo()
+        public override void Redo()
         {
             try
             {
-                var trades = await _localStorageService.GetRecentTrades(1000);
-                var tradeToDelete = trades.FirstOrDefault(t => 
-                    t.Symbol == _deletedTrade.Symbol && 
+                var tradeToDelete = _temporaryTrades.FirstOrDefault(t =>
+                    t.Symbol == _deletedTrade.Symbol &&
                     t.Date.Date == _deletedTrade.Date.Date &&
                     t.TradeSeq == _deletedTrade.TradeSeq);
 
                 if (tradeToDelete != null)
                 {
-                    // Delete the linked chart image if it exists
-                    if (!string.IsNullOrEmpty(tradeToDelete.ChartImagePath))
-                    {
-                        _imageStorageService.DeleteImage(tradeToDelete.ChartImagePath);
-                    }
-
-                    trades.Remove(tradeToDelete);
-                    await _localStorageService.SaveTrades(trades);
+                    _temporaryTrades.Remove(tradeToDelete);
                     Console.WriteLine($"Redo: Deleted trade {_deletedTrade.Symbol} on {_deletedTrade.Date:yyyy-MM-dd}");
                 }
             }
@@ -1024,21 +1121,20 @@ namespace TradingJournalGPT.Forms
     {
         private readonly TradeData _originalTrade;
         private readonly TradeData _modifiedTrade;
-        private readonly LocalStorageService _localStorageService;
+        private readonly List<TradeData> _temporaryTrades;
 
-        public EditTradeAction(TradeData originalTrade, TradeData modifiedTrade, LocalStorageService localStorageService)
+        public EditTradeAction(TradeData originalTrade, TradeData modifiedTrade, List<TradeData> temporaryTrades)
         {
             _originalTrade = originalTrade;
             _modifiedTrade = modifiedTrade;
-            _localStorageService = localStorageService;
+            _temporaryTrades = temporaryTrades;
         }
 
-        public override async void Undo()
+        public override void Undo()
         {
             try
             {
-                var trades = await _localStorageService.GetRecentTrades(1000);
-                var tradeToRestore = trades.FirstOrDefault(t => 
+                var tradeToRestore = _temporaryTrades.FirstOrDefault(t => 
                     t.Symbol == _modifiedTrade.Symbol && 
                     t.Date.Date == _modifiedTrade.Date.Date &&
                     t.TradeSeq == _modifiedTrade.TradeSeq);
@@ -1053,7 +1149,6 @@ namespace TradingJournalGPT.Forms
                     tradeToRestore.GapPercentHighToLow = _originalTrade.GapPercentHighToLow;
                     tradeToRestore.Volume = _originalTrade.Volume;
 
-                    await _localStorageService.SaveTrades(trades);
                     Console.WriteLine($"Undo: Restored original values for trade {_originalTrade.Symbol}");
                 }
             }
@@ -1063,12 +1158,11 @@ namespace TradingJournalGPT.Forms
             }
         }
 
-        public override async void Redo()
+        public override void Redo()
         {
             try
             {
-                var trades = await _localStorageService.GetRecentTrades(1000);
-                var tradeToModify = trades.FirstOrDefault(t => 
+                var tradeToModify = _temporaryTrades.FirstOrDefault(t => 
                     t.Symbol == _originalTrade.Symbol && 
                     t.Date.Date == _originalTrade.Date.Date &&
                     t.TradeSeq == _originalTrade.TradeSeq);
@@ -1083,7 +1177,6 @@ namespace TradingJournalGPT.Forms
                     tradeToModify.GapPercentHighToLow = _modifiedTrade.GapPercentHighToLow;
                     tradeToModify.Volume = _modifiedTrade.Volume;
 
-                    await _localStorageService.SaveTrades(trades);
                     Console.WriteLine($"Redo: Applied modified values for trade {_modifiedTrade.Symbol}");
                 }
             }
