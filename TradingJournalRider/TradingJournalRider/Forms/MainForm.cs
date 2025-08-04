@@ -104,10 +104,10 @@ namespace TradingJournalGPT.Forms
                 // If we have unsaved changes, merge with temporary state
                 if (_hasUnsavedChanges)
                 {
-                    // Keep temporary trades and merge with new storage trades
-                    var mergedTrades = new List<TradeData>();
+                    // Create a merged list starting with temporary trades (which include edits)
+                    var mergedTrades = new List<TradeData>(_temporaryTrades);
                     
-                    // Add all storage trades that aren't in deleted list
+                    // Add storage trades that aren't already in temporary trades and aren't deleted
                     foreach (var storageTrade in storageTrades)
                     {
                         var isDeleted = _deletedTrades.Any(d => 
@@ -115,14 +115,16 @@ namespace TradingJournalGPT.Forms
                             d.Date.Date == storageTrade.Date.Date &&
                             d.TradeSeq == storageTrade.TradeSeq);
                         
-                        if (!isDeleted)
+                        var alreadyInTemporary = _temporaryTrades.Any(t =>
+                            t.Symbol == storageTrade.Symbol &&
+                            t.Date.Date == storageTrade.Date.Date &&
+                            t.TradeSeq == storageTrade.TradeSeq);
+                        
+                        if (!isDeleted && !alreadyInTemporary)
                         {
                             mergedTrades.Add(storageTrade);
                         }
                     }
-                    
-                    // Add temporary trades (which include edits)
-                    mergedTrades.AddRange(_temporaryTrades);
                     
                     // Update temporary trades with merged result
                     _temporaryTrades = mergedTrades;
