@@ -719,6 +719,10 @@ namespace TradingJournalGPT.Forms
                         var onlineData = await _tradingJournalService.GetOnlineDataForTrade(trade.Symbol, trade.Date);
                         
                         // Update the trade with online data
+                        Console.WriteLine($"Updating trade {trade.Symbol} on {trade.Date:yyyy-MM-dd}:");
+                        Console.WriteLine($"  Previous Close: {trade.PreviousDayClose} → {onlineData.PreviousDayClose}");
+                        Console.WriteLine($"  Volume: {trade.Volume / 1000000m:F2}M → {onlineData.Volume:F2}M");
+                        
                         trade.PreviousDayClose = onlineData.PreviousDayClose;
                         trade.Volume = (long)(onlineData.Volume * 1000000); // Convert millions to actual volume
                         
@@ -727,19 +731,29 @@ namespace TradingJournalGPT.Forms
                         {
                             var gapPercentToHigh = ((trade.HighAfterVolumeSurge - onlineData.PreviousDayClose) / onlineData.PreviousDayClose) * 100;
                             trade.GapPercentToHigh = Math.Round(gapPercentToHigh, 1);
+                            Console.WriteLine($"  Gap % (Close to High): {trade.GapPercentToHigh}%");
                         }
                         
                         if (trade.HighAfterVolumeSurge > 0)
                         {
                             var gapPercentHighToLow = ((trade.LowAfterVolumeSurge - trade.HighAfterVolumeSurge) / trade.HighAfterVolumeSurge) * 100;
                             trade.GapPercentHighToLow = Math.Round(Math.Abs(gapPercentHighToLow), 1);
+                            Console.WriteLine($"  Gap % (High to Low): {trade.GapPercentHighToLow}%");
                         }
 
-                        // Update the display
+                        // Update the display immediately
                         dataGridViewTrades.Rows[rowIndex].Cells["Previous Close"].Value = trade.PreviousDayClose;
                         dataGridViewTrades.Rows[rowIndex].Cells["Volume (M)"].Value = onlineData.Volume;
                         dataGridViewTrades.Rows[rowIndex].Cells["Gap % (Close to High)"].Value = trade.GapPercentToHigh;
                         dataGridViewTrades.Rows[rowIndex].Cells["Gap % (High to Low)"].Value = trade.GapPercentHighToLow;
+                        
+                        // Force the DataGridView to refresh the display
+                        dataGridViewTrades.Refresh();
+                        Application.DoEvents();
+
+                        // Update status to show the trade was updated
+                        lblStatus.Text = $"Updated {trade.Symbol} - Previous Close: {trade.PreviousDayClose}, Volume: {onlineData.Volume:F2}M";
+                        Application.DoEvents();
 
                         // Mark as having unsaved changes
                         SetUnsavedChanges(true);
