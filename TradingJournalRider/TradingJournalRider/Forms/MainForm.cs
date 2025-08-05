@@ -843,7 +843,7 @@ namespace TradingJournalGPT.Forms
                         // Refresh the data table
                         LoadRecentTrades();
                         
-                        MessageBox.Show("Trade recorded successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        MessageBox.Show("Trade recorded successfully!\n\nNote: Use 'Get Online Data' button to populate Previous Close, Volume, and Gap Percentages with real market data.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                         Console.WriteLine("ProcessSingleImage completed successfully");
                     }
                     else

@@ -234,10 +234,10 @@ namespace TradingJournalGPT.Services
                 Date = chartData.Date,
                 HighAfterVolumeSurge = chartData.HighAfterVolumeSurge,
                 LowAfterVolumeSurge = chartData.LowAfterVolumeSurge,
-                PreviousDayClose = 0m, // Default value since we're not getting this data
-                GapPercentToHigh = 0m, // Default value since we don't have previous day close
-                GapPercentHighToLow = 0m, // Default value since we don't have previous day close
-                Volume = 0, // Default value since we're not getting volume data
+                PreviousDayClose = 0m, // Will be populated by Get Online Data
+                GapPercentToHigh = 0m, // Will be calculated when previous day close is available
+                GapPercentHighToLow = 0m, // Will be calculated when previous day close is available
+                Volume = 0, // Will be populated by Get Online Data
                 Analysis = ""
             };
 

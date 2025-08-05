@@ -21,12 +21,52 @@ namespace TradingJournalGPT.Forms
         {
             lblSymbol.Text = _tradeData.Symbol;
             lblDate.Text = _tradeData.Date.ToString("yyyy-MM-dd");
-            lblPreviousClose.Text = $"${_tradeData.PreviousDayClose:F2}";
+            
+            // Display previous close with appropriate message if not available
+            if (_tradeData.PreviousDayClose > 0)
+            {
+                lblPreviousClose.Text = $"${_tradeData.PreviousDayClose:F2}";
+            }
+            else
+            {
+                lblPreviousClose.Text = "Use 'Get Online Data' to populate";
+                lblPreviousClose.ForeColor = Color.Gray;
+            }
+            
             lblHighAfterVolumeSurge.Text = $"${_tradeData.HighAfterVolumeSurge:F2}";
             lblLowAfterVolumeSurge.Text = $"${_tradeData.LowAfterVolumeSurge:F2}";
-            lblGapPercentToHigh.Text = $"{_tradeData.GapPercentToHigh:F1}%";
-            lblGapPercentHighToLow.Text = $"{_tradeData.GapPercentHighToLow:F1}%";
-            lblVolume.Text = $"{_tradeData.Volume / 1000000:F2}M";
+            
+            // Display gap percentages with appropriate message if not available
+            if (_tradeData.GapPercentToHigh > 0)
+            {
+                lblGapPercentToHigh.Text = $"{_tradeData.GapPercentToHigh:F1}%";
+            }
+            else
+            {
+                lblGapPercentToHigh.Text = "Calculate after getting online data";
+                lblGapPercentToHigh.ForeColor = Color.Gray;
+            }
+            
+            if (_tradeData.GapPercentHighToLow > 0)
+            {
+                lblGapPercentHighToLow.Text = $"{_tradeData.GapPercentHighToLow:F1}%";
+            }
+            else
+            {
+                lblGapPercentHighToLow.Text = "Calculate after getting online data";
+                lblGapPercentHighToLow.ForeColor = Color.Gray;
+            }
+            
+            // Display volume with appropriate message if not available
+            if (_tradeData.Volume > 0)
+            {
+                lblVolume.Text = $"{_tradeData.Volume / 1000000:F2}M";
+            }
+            else
+            {
+                lblVolume.Text = "Use 'Get Online Data' to populate";
+                lblVolume.ForeColor = Color.Gray;
+            }
         }
 
         private void btnSaveToGoogleSheets_Click(object? sender, EventArgs e)
