@@ -609,7 +609,6 @@ namespace TradingJournalGPT.Forms
             _isProcessing = true;
             btnAnalyzeChartImage.Enabled = false;
             btnAnalyzeChartFolder.Enabled = false;
-            btnGetOnlineData.Enabled = false;
             
             try
             {
@@ -632,11 +631,10 @@ namespace TradingJournalGPT.Forms
             }
             finally
             {
-                // Reset processing flag if user cancels file dialog
-                _isProcessing = false;
-                btnAnalyzeChartImage.Enabled = true;
-                btnAnalyzeChartFolder.Enabled = true;
-                btnGetOnlineData.Enabled = true;
+                            // Reset processing flag if user cancels file dialog
+            _isProcessing = false;
+            btnAnalyzeChartImage.Enabled = true;
+            btnAnalyzeChartFolder.Enabled = true;
             }
         }
 
@@ -656,136 +654,7 @@ namespace TradingJournalGPT.Forms
             }
         }
 
-        private async void btnGetOnlineData_Click(object? sender, EventArgs e)
-        {
-            if (_isProcessing)
-            {
-                MessageBox.Show("Already processing. Please wait for the current operation to complete.", "Processing", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
 
-            if (dataGridViewTrades.SelectedRows.Count == 0)
-            {
-                MessageBox.Show("Please select one or more trades to get online data for.", "No Selection", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-
-            try
-            {
-                _isProcessing = true;
-                btnAnalyzeChartImage.Enabled = false;
-                btnAnalyzeChartFolder.Enabled = false;
-                btnGetOnlineData.Enabled = false;
-                btnRefresh.Enabled = false;
-
-                var selectedTrades = new List<(int rowIndex, TradeData trade)>();
-                
-                // Get selected trades
-                foreach (DataGridViewRow row in dataGridViewTrades.SelectedRows)
-                {
-                    var symbol = row.Cells["Symbol"].Value?.ToString();
-                    var dateValue = row.Cells["Date"].Value;
-                    
-                    if (string.IsNullOrEmpty(symbol) || dateValue == null)
-                        continue;
-
-                    if (DateTime.TryParse(dateValue.ToString(), out var date))
-                    {
-                        var trade = _temporaryTrades.FirstOrDefault(t => 
-                            t.Symbol == symbol && 
-                            t.Date.Date == date.Date);
-                        
-                        if (trade != null)
-                        {
-                            selectedTrades.Add((row.Index, trade));
-                        }
-                    }
-                }
-
-                if (selectedTrades.Count == 0)
-                {
-                    MessageBox.Show("No valid trades selected for online data retrieval.", "No Valid Trades", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return;
-                }
-
-                // Process each selected trade
-                for (int i = 0; i < selectedTrades.Count; i++)
-                {
-                    var (rowIndex, trade) = selectedTrades[i];
-                    
-                    try
-                    {
-                        lblStatus.Text = $"Getting online data for {trade.Symbol} ({i + 1}/{selectedTrades.Count})...";
-                        Application.DoEvents();
-
-                        var onlineData = await _tradingJournalService.GetOnlineDataForTrade(trade.Symbol, trade.Date);
-                        
-                        // Update the trade with online data
-                        Console.WriteLine($"Updating trade {trade.Symbol} on {trade.Date:yyyy-MM-dd}:");
-                        Console.WriteLine($"  Previous Close: {trade.PreviousDayClose} → {onlineData.PreviousDayClose}");
-                        Console.WriteLine($"  Volume: {trade.Volume / 1000000m:F2}M → {onlineData.Volume:F2}M");
-                        
-                        trade.PreviousDayClose = onlineData.PreviousDayClose;
-                        trade.Volume = (long)(onlineData.Volume * 1000000); // Convert millions to actual volume
-                        
-                        // Calculate gap percentages dynamically
-                        Console.WriteLine($"  High After Volume Surge: {trade.HighAfterVolumeSurge}");
-                        Console.WriteLine($"  Low After Volume Surge: {trade.LowAfterVolumeSurge}");
-                        
-                        // Use the helper method to recalculate gap percentages
-                        RecalculateGapPercentages(trade);
-                        Console.WriteLine($"  Gap % (Close to High): {trade.GapPercentToHigh}%");
-                        Console.WriteLine($"  Gap % (High to Low): {trade.GapPercentHighToLow}%");
-
-                        // Update the display immediately
-                        dataGridViewTrades.Rows[rowIndex].Cells["Previous Close"].Value = trade.PreviousDayClose;
-                        dataGridViewTrades.Rows[rowIndex].Cells["Volume (M)"].Value = onlineData.Volume;
-                        dataGridViewTrades.Rows[rowIndex].Cells["Gap % (Close to High)"].Value = trade.GapPercentToHigh;
-                        dataGridViewTrades.Rows[rowIndex].Cells["Gap % (High to Low)"].Value = trade.GapPercentHighToLow;
-                        
-                        // Force the DataGridView to refresh the display
-                        dataGridViewTrades.Refresh();
-                        Application.DoEvents();
-
-                        // Update status to show the trade was updated
-                        lblStatus.Text = $"Updated {trade.Symbol} - Previous Close: {trade.PreviousDayClose}, Volume: {onlineData.Volume:F2}M";
-                        Application.DoEvents();
-
-                        // Mark as having unsaved changes
-                        SetUnsavedChanges(true);
-                        
-                        // Ensure the trade is properly updated in the temporary state
-                        var existingTradeIndex = _temporaryTrades.IndexOf(trade);
-                        if (existingTradeIndex >= 0)
-                        {
-                            _temporaryTrades[existingTradeIndex] = trade;
-                            Console.WriteLine($"Updated trade in temporary state at index {existingTradeIndex}");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error getting online data for {trade.Symbol}: {ex.Message}");
-                        // Continue with next trade instead of stopping
-                    }
-                }
-
-                lblStatus.Text = "Online data retrieval completed.";
-                MessageBox.Show($"Successfully updated online data for {selectedTrades.Count} trade(s).", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error getting online data: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-            finally
-            {
-                _isProcessing = false;
-                btnAnalyzeChartImage.Enabled = true;
-                btnAnalyzeChartFolder.Enabled = true;
-                btnGetOnlineData.Enabled = true;
-                btnRefresh.Enabled = true;
-                lblStatus.Text = "Ready";
-            }
-        }
 
         private async Task ProcessSingleImage(string imagePath)
         {
@@ -876,7 +745,6 @@ namespace TradingJournalGPT.Forms
             _isProcessing = true;
             btnAnalyzeChartImage.Enabled = false;
             btnAnalyzeChartFolder.Enabled = false;
-            btnGetOnlineData.Enabled = false;
             progressBar.Visible = true;
 
             try
@@ -960,11 +828,10 @@ namespace TradingJournalGPT.Forms
             }
             finally
             {
-                _isProcessing = false;
-                btnAnalyzeChartImage.Enabled = true;
-                btnAnalyzeChartFolder.Enabled = true;
-                btnGetOnlineData.Enabled = true;
-                progressBar.Visible = false;
+                            _isProcessing = false;
+            btnAnalyzeChartImage.Enabled = true;
+            btnAnalyzeChartFolder.Enabled = true;
+            progressBar.Visible = false;
                 lblStatus.Text = "Ready";
             }
         }
@@ -1243,6 +1110,42 @@ namespace TradingJournalGPT.Forms
             }
         }
 
+        /// <summary>
+        /// Tests float data retrieval for demonstration purposes
+        /// </summary>
+        private void TestFloatDataRetrieval()
+        {
+            if (_floatDataService == null)
+            {
+                MessageBox.Show("Float data service is not available.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            // Test with a few random symbols from the CSV
+            string[] testSymbols = { "SER", "AKTX", "ANTE", "ASUR", "AYRO", "BIOL", "BTAI", "CAAS", "CAPR", "CBAT" };
+            
+            var result = new System.Text.StringBuilder();
+            result.AppendLine("Float Data Retrieval Test");
+            result.AppendLine("=========================");
+            
+            foreach (var symbol in testSymbols)
+            {
+                decimal floatValue = _floatDataService.GetFloat(symbol);
+                result.AppendLine($"Symbol: {symbol} -> Float: {floatValue} million");
+            }
+            
+            // Test with a symbol that doesn't exist
+            result.AppendLine("\nTesting with non-existent symbol 'MWYN':");
+            decimal mwynFloat = _floatDataService.GetFloat("MWYN");
+            result.AppendLine($"Symbol: MWYN -> Float: {mwynFloat} million (0 means not found)");
+            
+            // Show some statistics
+            result.AppendLine($"\nTotal symbols in database: {_floatDataService.GetSymbolCount()}");
+            result.AppendLine($"Current file info: {_floatDataService.GetCurrentFileInfo()}");
+            
+            MessageBox.Show(result.ToString(), "Float Data Test Results", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
         private void DataGridViewTrades_CellEndEdit(object? sender, DataGridViewCellEventArgs e)
         {
             try
@@ -1365,6 +1268,99 @@ namespace TradingJournalGPT.Forms
                 {
                     MessageBox.Show($"Error deleting trade: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
+            }
+        }
+
+        /// <summary>
+        /// Updates the float value for the selected trade using the FloatDataService
+        /// </summary>
+        private void UpdateFloatForSelectedTrade()
+        {
+            if (dataGridViewTrades.SelectedRows.Count == 0) return;
+
+            try
+            {
+                var selectedRow = dataGridViewTrades.SelectedRows[0];
+                var symbol = selectedRow.Cells["Symbol"].Value?.ToString();
+                var date = selectedRow.Cells["Date"].Value?.ToString();
+                var tradeSeq = Convert.ToInt32(selectedRow.Cells["Trade Seq"].Value ?? 0);
+
+                if (string.IsNullOrEmpty(symbol))
+                {
+                    MessageBox.Show("No symbol found for this trade.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                // Parse the date string properly
+                DateTime parsedDate;
+                if (!DateTime.TryParse(date, out parsedDate))
+                {
+                    Console.WriteLine($"Warning: Could not parse date '{date}' for float update");
+                    MessageBox.Show($"Could not parse date '{date}'. Please try again.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                // Find the trade in temporary state
+                var tradeToUpdate = _temporaryTrades.FirstOrDefault(t => 
+                    t.Symbol == symbol && 
+                    t.Date.Date == parsedDate.Date &&
+                    t.TradeSeq == tradeSeq);
+
+                if (tradeToUpdate != null)
+                {
+                    // Get the current float value from the service
+                    decimal newFloatValue = _floatDataService.GetFloat(symbol);
+                    
+                    if (newFloatValue > 0)
+                    {
+                        // Create a copy of the original trade for undo
+                        var originalTrade = new TradeData
+                        {
+                            Symbol = tradeToUpdate.Symbol,
+                            Date = tradeToUpdate.Date,
+                            TradeSeq = tradeToUpdate.TradeSeq,
+                            PreviousDayClose = tradeToUpdate.PreviousDayClose,
+                            HighAfterVolumeSurge = tradeToUpdate.HighAfterVolumeSurge,
+                            LowAfterVolumeSurge = tradeToUpdate.LowAfterVolumeSurge,
+                            GapPercentToHigh = tradeToUpdate.GapPercentToHigh,
+                            GapPercentHighToLow = tradeToUpdate.GapPercentHighToLow,
+                            Volume = tradeToUpdate.Volume,
+                            Setup = tradeToUpdate.Setup,
+                            Float = tradeToUpdate.Float,
+                            Catalyst = tradeToUpdate.Catalyst,
+                            Technicals = tradeToUpdate.Technicals,
+                            ChartImagePath = tradeToUpdate.ChartImagePath
+                        };
+
+                        // Update the float value
+                        tradeToUpdate.Float = newFloatValue;
+
+                        // Create undo action
+                        var editAction = new EditTradeAction(originalTrade, tradeToUpdate, _temporaryTrades);
+                        AddUndoAction(editAction);
+
+                        // Update the display
+                        selectedRow.Cells["Float"].Value = newFloatValue;
+
+                        // Mark as having unsaved changes
+                        SetUnsavedChanges(true);
+
+                        MessageBox.Show($"Float value updated for {symbol}: {newFloatValue} million", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    else
+                    {
+                        MessageBox.Show($"No float data found for symbol '{symbol}' in the database.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"No trade found matching: Symbol={symbol}, Date={parsedDate:yyyy-MM-dd}, TradeSeq={tradeSeq}");
+                    MessageBox.Show("Trade not found in temporary state. Please refresh and try again.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error updating float value: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -1542,6 +1538,14 @@ namespace TradingJournalGPT.Forms
             var deleteItem = new ToolStripMenuItem("Delete Trade");
             deleteItem.Click += (sender, e) => DeleteSelectedRow();
             _contextMenu.Items.Add(deleteItem);
+            
+            // Add separator
+            _contextMenu.Items.Add(new ToolStripSeparator());
+            
+            // Add Update Float option
+            var updateFloatItem = new ToolStripMenuItem("Update Float");
+            updateFloatItem.Click += (sender, e) => UpdateFloatForSelectedTrade();
+            _contextMenu.Items.Add(updateFloatItem);
         }
 
         private void CreateSetupsContextMenu()
@@ -2345,6 +2349,11 @@ namespace TradingJournalGPT.Forms
         {
             CleanupOrphanedImages();
             MessageBox.Show("Orphaned images cleanup completed!", "Cleanup Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void testFloatDataMenuItem_Click(object? sender, EventArgs e)
+        {
+            TestFloatDataRetrieval();
         }
 
         private void optionsMenuItem_Click(object? sender, EventArgs e)

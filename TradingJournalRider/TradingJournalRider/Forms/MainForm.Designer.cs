@@ -46,7 +46,6 @@ namespace TradingJournalGPT.Forms
             this.dataGridViewTrades = new System.Windows.Forms.DataGridView();
             this.btnAnalyzeChartImage = new System.Windows.Forms.Button();
             this.btnAnalyzeChartFolder = new System.Windows.Forms.Button();
-            this.btnGetOnlineData = new System.Windows.Forms.Button();
             this.btnRefresh = new System.Windows.Forms.Button();
             this.progressBar = new System.Windows.Forms.ProgressBar();
             this.lblStatus = new System.Windows.Forms.Label();
@@ -76,6 +75,7 @@ namespace TradingJournalGPT.Forms
             this.deleteMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolsMenu = new System.Windows.Forms.ToolStripMenuItem();
             this.refreshMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.testFloatDataMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.cleanupOrphanedImagesMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripSeparator5 = new System.Windows.Forms.ToolStripSeparator();
             this.optionsMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -258,6 +258,7 @@ namespace TradingJournalGPT.Forms
             // 
             this.toolsMenu.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.refreshMenuItem,
+            this.testFloatDataMenuItem,
             this.cleanupOrphanedImagesMenuItem,
             this.toolStripSeparator5,
             this.optionsMenuItem});
@@ -270,6 +271,12 @@ namespace TradingJournalGPT.Forms
             this.refreshMenuItem.ShortcutKeys = System.Windows.Forms.Keys.F5;
             this.refreshMenuItem.Text = "&Refresh";
             this.refreshMenuItem.Click += new System.EventHandler(this.refreshMenuItem_Click);
+            // 
+            // testFloatDataMenuItem
+            // 
+            this.testFloatDataMenuItem.Name = "testFloatDataMenuItem";
+            this.testFloatDataMenuItem.Text = "&Test Float Data";
+            this.testFloatDataMenuItem.Click += new System.EventHandler(this.testFloatDataMenuItem_Click);
             // 
             // cleanupOrphanedImagesMenuItem
             // 
@@ -468,21 +475,7 @@ namespace TradingJournalGPT.Forms
             this.btnAnalyzeChartFolder.UseVisualStyleBackColor = false;
             this.btnAnalyzeChartFolder.Click += new System.EventHandler(this.btnAnalyzeChartFolder_Click);
             // 
-            // btnGetOnlineData
-            // 
-            this.btnGetOnlineData.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
-            this.btnGetOnlineData.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(193)))), ((int)(((byte)(7)))));
-            this.btnGetOnlineData.FlatAppearance.BorderSize = 0;
-            this.btnGetOnlineData.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnGetOnlineData.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
-            this.btnGetOnlineData.ForeColor = System.Drawing.Color.White;
-            this.btnGetOnlineData.Location = new System.Drawing.Point(324, 12);
-            this.btnGetOnlineData.Name = "btnGetOnlineData";
-            this.btnGetOnlineData.Size = new System.Drawing.Size(150, 40);
-            this.btnGetOnlineData.TabIndex = 3;
-            this.btnGetOnlineData.Text = "Get Online Data";
-            this.btnGetOnlineData.UseVisualStyleBackColor = false;
-            this.btnGetOnlineData.Click += new System.EventHandler(this.btnGetOnlineData_Click);
+
             // 
             // btnRefresh
             // 
@@ -538,7 +531,7 @@ namespace TradingJournalGPT.Forms
             this.panelBottom.Controls.Add(this.progressBar);
             this.panelBottom.Controls.Add(this.btnAnalyzeChartImage);
             this.panelBottom.Controls.Add(this.btnAnalyzeChartFolder);
-            this.panelBottom.Controls.Add(this.btnGetOnlineData);
+
             this.panelBottom.Controls.Add(this.btnRefresh);
             this.panelBottom.Controls.Add(this.btnSaveChanges);
             this.panelBottom.Controls.Add(this.lblUnsavedChanges);
@@ -594,7 +587,7 @@ namespace TradingJournalGPT.Forms
         private System.Windows.Forms.DataGridView dataGridViewTrades;
         private System.Windows.Forms.Button btnAnalyzeChartImage;
         private System.Windows.Forms.Button btnAnalyzeChartFolder;
-        private System.Windows.Forms.Button btnGetOnlineData;
+
         private System.Windows.Forms.Button btnRefresh;
         private System.Windows.Forms.ProgressBar progressBar;
         private System.Windows.Forms.Label lblStatus;
@@ -624,6 +617,7 @@ namespace TradingJournalGPT.Forms
         private System.Windows.Forms.ToolStripMenuItem deleteMenuItem;
         private System.Windows.Forms.ToolStripMenuItem toolsMenu;
         private System.Windows.Forms.ToolStripMenuItem refreshMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem testFloatDataMenuItem;
         private System.Windows.Forms.ToolStripMenuItem cleanupOrphanedImagesMenuItem;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator5;
         private System.Windows.Forms.ToolStripMenuItem optionsMenuItem;

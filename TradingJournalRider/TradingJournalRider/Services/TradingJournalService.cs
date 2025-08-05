@@ -68,21 +68,7 @@ namespace TradingJournalGPT.Services
             }
         }
 
-        public async Task<ChatGptService.OnlineData> GetOnlineDataForTrade(string symbol, DateTime date)
-        {
-            try
-            {
-                Console.WriteLine($"Getting online data for {symbol} on {date:yyyy-MM-dd}");
-                var onlineData = await _chatGptService.GetOnlineDataForTrade(symbol, date);
-                Console.WriteLine($"Online data retrieved: PreviousClose={onlineData.PreviousDayClose}, Volume={onlineData.Volume}");
-                return onlineData;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error getting online data for {symbol}: {ex.Message}");
-                throw new Exception($"Error getting online data for {symbol}: {ex.Message}");
-            }
-        }
+
 
         public async Task RecordTrade(TradeData tradeData, bool useLocalStorage = false)
         {

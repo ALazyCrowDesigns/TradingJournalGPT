@@ -50,72 +50,9 @@ namespace TradingJournalGPT.Services
             }
         }
 
-        public async Task<OnlineData> GetOnlineDataForTrade(string symbol, DateTime date)
-        {
-            try
-            {
-                var prompt = $@"You are a financial data expert. Get the exact previous day closing price and trading volume for {symbol} on {date:yyyy-MM-dd}.
 
-                Use reliable financial sources like Yahoo Finance, MarketWatch, or similar to get:
-                1. The previous trading day's closing price for {symbol}
-                2. The total volume traded on {date:yyyy-MM-dd} for {symbol}
 
-                Return ONLY this JSON format with actual market data (not placeholder values):
-                {{
-                    ""previousDayClose"": 0.00,
-                    ""volume"": 0.00
-                }}
 
-                CRITICAL REQUIREMENTS:
-                - previousDayClose: Must be the actual previous trading day's closing price (not 0.00)
-                - volume: Must be the actual volume traded on {date:yyyy-MM-dd} in MILLIONS (e.g., 100.00 for 100M shares)
-                - Use real market data, not estimates or placeholders
-                - If data is not available, return the closest available data with a note
-                - Format numbers as decimals (e.g., 15.75, 123.45)";
-
-                // Call ChatGPT API without image (text-only)
-                var response = await CallChatGptApiTextOnly(prompt);
-                return ParseOnlineDataFromResponse(response);
-            }
-            catch (Exception ex)
-            {
-                throw new Exception($"Error getting online data for {symbol} on {date:yyyy-MM-dd}: {ex.Message}");
-            }
-        }
-
-        private async Task<string> CallChatGptApiTextOnly(string prompt)
-        {
-            var requestPayload = new
-            {
-                model = "gpt-4o",
-                messages = new object[]
-                {
-                    new
-                    {
-                        role = "user",
-                        content = prompt
-                    }
-                },
-                max_tokens = 1000
-            };
-
-            var jsonRequest = JsonSerializer.Serialize(requestPayload);
-            var content = new StringContent(jsonRequest, Encoding.UTF8, "application/json");
-
-            var response = await _httpClient.PostAsync("https://api.openai.com/v1/chat/completions", content);
-            var responseText = await response.Content.ReadAsStringAsync();
-
-            if (!response.IsSuccessStatusCode)
-            {
-                throw new Exception($"OpenAI API error: {response.StatusCode} - {responseText}");
-            }
-
-            using var responseDoc = JsonDocument.Parse(responseText);
-            var choices = responseDoc.RootElement.GetProperty("choices");
-            var firstChoice = choices[0];
-            var message = firstChoice.GetProperty("message");
-            return message.GetProperty("content").GetString() ?? "";
-        }
 
         private async Task<string> CallChatGptApi(string prompt, string imageBase64)
         {
@@ -198,33 +135,7 @@ namespace TradingJournalGPT.Services
 
 
 
-        private OnlineData ParseOnlineDataFromResponse(string responseText)
-        {
-            try
-            {
-                var jsonStart = responseText.IndexOf('{');
-                var jsonEnd = responseText.LastIndexOf('}') + 1;
-                
-                if (jsonStart == -1 || jsonEnd == 0)
-                {
-                    throw new Exception("Could not find JSON in response");
-                }
 
-                var jsonText = responseText.Substring(jsonStart, jsonEnd - jsonStart);
-                using var document = System.Text.Json.JsonDocument.Parse(jsonText);
-                var root = document.RootElement;
-
-                return new OnlineData
-                {
-                    PreviousDayClose = GetDecimalValue(root, "previousDayClose"),
-                    Volume = GetDecimalValue(root, "volume")
-                };
-            }
-            catch (Exception ex)
-            {
-                throw new Exception($"Error parsing online data response: {ex.Message}");
-            }
-        }
 
         private TradeData CreateTradeDataFromChartData(ChartData chartData)
         {
@@ -261,11 +172,7 @@ namespace TradingJournalGPT.Services
             public decimal LowAfterVolumeSurge { get; set; }
         }
 
-        public class OnlineData
-        {
-            public decimal PreviousDayClose { get; set; }
-            public decimal Volume { get; set; }
-        }
+
 
 
 
