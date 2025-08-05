@@ -24,18 +24,24 @@ namespace TradingJournalGPT.Services
                 var imageBytes = await File.ReadAllBytesAsync(imagePath);
                 var imageBase64 = Convert.ToBase64String(imageBytes);
 
-                // Single prompt: Extract chart data only
-                var prompt = @"Look at this chart and extract ONLY the stock name, date, post volume surge high, and new low after that volume surge high.
+                // Enhanced prompt: Extract chart data including low before volume surge and total volume
+                var prompt = @"Look at this chart and extract the stock name, date, volume surge high, low after volume surge, low BEFORE the volume surge high, and total volume traded for this symbol on this date.
 
                 Return ONLY this JSON format with actual numbers (not null):
                 {
                     ""symbol"": ""stock symbol"",
                     ""date"": ""YYYY-MM-DD"",
                     ""highAfterVolumeSurge"": 0.00,
-                    ""lowAfterVolumeSurge"": 0.00
+                    ""lowAfterVolumeSurge"": 0.00,
+                    ""lowBeforeVolumeSurge"": 0.00,
+                    ""totalVolume"": 0
                 }
 
-                IMPORTANT: Use the high and low AFTER the volume surge, not the day's HOD/LOD. All numeric values must be actual numbers, not null.";
+                IMPORTANT: 
+                - Use the high and low AFTER the volume surge, not the day's HOD/LOD
+                - lowBeforeVolumeSurge should be the low price BEFORE the volume surge high occurred
+                - totalVolume should be the total volume traded for this symbol on this date (in whole numbers)
+                - All numeric values must be actual numbers, not null";
 
                 // Single API call
                 var response = await CallChatGptApi(prompt, imageBase64);
@@ -124,7 +130,9 @@ namespace TradingJournalGPT.Services
                     Symbol = GetStringValue(root, "symbol"),
                     Date = GetDateTimeValue(root, "date"),
                     HighAfterVolumeSurge = GetDecimalValue(root, "highAfterVolumeSurge"),
-                    LowAfterVolumeSurge = GetDecimalValue(root, "lowAfterVolumeSurge")
+                    LowAfterVolumeSurge = GetDecimalValue(root, "lowAfterVolumeSurge"),
+                    LowBeforeVolumeSurge = GetDecimalValue(root, "lowBeforeVolumeSurge"),
+                    TotalVolume = GetIntValue(root, "totalVolume")
                 };
             }
             catch (Exception ex)
@@ -145,10 +153,12 @@ namespace TradingJournalGPT.Services
                 Date = chartData.Date,
                 HighAfterVolumeSurge = chartData.HighAfterVolumeSurge,
                 LowAfterVolumeSurge = chartData.LowAfterVolumeSurge,
+                LowBeforeVolumeSurge = chartData.LowBeforeVolumeSurge,
                 PreviousDayClose = 0m, // Will be populated by Get Online Data
                 GapPercentToHigh = 0m, // Will be calculated when previous day close is available
                 GapPercentHighToLow = 0m, // Will be calculated when previous day close is available
                 Volume = 0, // Will be populated by Get Online Data
+                TotalVolume = chartData.TotalVolume, // Use the volume from ChatGPT analysis
                 Analysis = ""
             };
 
@@ -170,6 +180,8 @@ namespace TradingJournalGPT.Services
             public DateTime Date { get; set; }
             public decimal HighAfterVolumeSurge { get; set; }
             public decimal LowAfterVolumeSurge { get; set; }
+            public decimal LowBeforeVolumeSurge { get; set; }
+            public int TotalVolume { get; set; }
         }
 
 

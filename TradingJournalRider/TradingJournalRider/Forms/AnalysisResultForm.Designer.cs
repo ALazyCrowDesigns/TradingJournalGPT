@@ -46,6 +46,8 @@ namespace TradingJournalGPT.Forms
             this.lblGapPercentHighToLow = new System.Windows.Forms.Label();
             this.lblVolumeLabel = new System.Windows.Forms.Label();
             this.lblVolume = new System.Windows.Forms.Label();
+            this.lblFloatLabel = new System.Windows.Forms.Label();
+            this.lblFloat = new System.Windows.Forms.Label();
             this.panelButtons = new System.Windows.Forms.Panel();
             this.btnCancel = new System.Windows.Forms.Button();
             this.btnSaveLocally = new System.Windows.Forms.Button();
@@ -234,6 +236,26 @@ namespace TradingJournalGPT.Forms
             this.lblVolume.TabIndex = 16;
             this.lblVolume.Text = "0M";
             // 
+            // lblFloatLabel
+            // 
+            this.lblFloatLabel.AutoSize = true;
+            this.lblFloatLabel.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
+            this.lblFloatLabel.Location = new System.Drawing.Point(12, 260);
+            this.lblFloatLabel.Name = "lblFloatLabel";
+            this.lblFloatLabel.Size = new System.Drawing.Size(37, 15);
+            this.lblFloatLabel.TabIndex = 17;
+            this.lblFloatLabel.Text = "Float:";
+            // 
+            // lblFloat
+            // 
+            this.lblFloat.AutoSize = true;
+            this.lblFloat.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
+            this.lblFloat.Location = new System.Drawing.Point(120, 260);
+            this.lblFloat.Name = "lblFloat";
+            this.lblFloat.Size = new System.Drawing.Size(25, 15);
+            this.lblFloat.TabIndex = 18;
+            this.lblFloat.Text = "0M";
+            // 
             // panelButtons
             // 
             this.panelButtons.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(240)))), ((int)(((byte)(240)))), ((int)(((byte)(240)))));
@@ -241,7 +263,7 @@ namespace TradingJournalGPT.Forms
             this.panelButtons.Controls.Add(this.btnSaveLocally);
             this.panelButtons.Controls.Add(this.btnSaveToGoogleSheets);
             this.panelButtons.Dock = System.Windows.Forms.DockStyle.Bottom;
-            this.panelButtons.Location = new System.Drawing.Point(0, 270);
+            this.panelButtons.Location = new System.Drawing.Point(0, 295);
             this.panelButtons.Name = "panelButtons";
             this.panelButtons.Size = new System.Drawing.Size(384, 60);
             this.panelButtons.TabIndex = 17;
@@ -298,8 +320,10 @@ namespace TradingJournalGPT.Forms
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(384, 330);
+            this.ClientSize = new System.Drawing.Size(384, 355);
             this.Controls.Add(this.panelButtons);
+            this.Controls.Add(this.lblFloat);
+            this.Controls.Add(this.lblFloatLabel);
             this.Controls.Add(this.lblVolume);
             this.Controls.Add(this.lblVolumeLabel);
             this.Controls.Add(this.lblGapPercentHighToLow);
@@ -350,6 +374,8 @@ namespace TradingJournalGPT.Forms
         private System.Windows.Forms.Label lblGapPercentHighToLow;
         private System.Windows.Forms.Label lblVolumeLabel;
         private System.Windows.Forms.Label lblVolume;
+        private System.Windows.Forms.Label lblFloatLabel;
+        private System.Windows.Forms.Label lblFloat;
         private System.Windows.Forms.Panel panelButtons;
         private System.Windows.Forms.Button btnCancel;
         private System.Windows.Forms.Button btnSaveLocally;

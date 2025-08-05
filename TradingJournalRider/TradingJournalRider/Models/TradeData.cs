@@ -6,6 +6,7 @@ namespace TradingJournalGPT.Models
         public DateTime Date { get; set; }
         public decimal HighAfterVolumeSurge { get; set; }
         public decimal LowAfterVolumeSurge { get; set; }
+        public decimal LowBeforeVolumeSurge { get; set; } // Low before the volume surge high
         public decimal PreviousDayClose { get; set; }
         public decimal GapPercentToHigh { get; set; }
         public decimal GapPercentHighToLow { get; set; }
@@ -20,6 +21,7 @@ namespace TradingJournalGPT.Models
         public string TradeType { get; set; } = string.Empty;
         public decimal ProfitLoss { get; set; }
         public long Volume { get; set; }
+        public long TotalVolume { get; set; } // Total volume traded on this date
         public DateTime RecordedDate { get; set; } = DateTime.Now;
         
         // Additional fields for future expansion

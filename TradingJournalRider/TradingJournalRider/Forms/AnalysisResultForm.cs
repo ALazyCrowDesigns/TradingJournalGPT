@@ -67,6 +67,17 @@ namespace TradingJournalGPT.Forms
                 lblVolume.Text = "Use 'Get Online Data' to populate";
                 lblVolume.ForeColor = Color.Gray;
             }
+            
+            // Display float value with appropriate message if not available
+            if (_tradeData.Float > 0)
+            {
+                lblFloat.Text = $"{_tradeData.Float:F2}M";
+            }
+            else
+            {
+                lblFloat.Text = "Not found in float data";
+                lblFloat.ForeColor = Color.Gray;
+            }
         }
 
         private void btnSaveToGoogleSheets_Click(object? sender, EventArgs e)

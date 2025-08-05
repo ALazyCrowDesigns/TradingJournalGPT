@@ -85,15 +85,18 @@ namespace TradingJournalGPT.Forms
         private void InitializeDataTable()
         {
             _tradesDataTable = new DataTable();
+            _tradesDataTable.Columns.Add("Select", typeof(bool)); // Checkbox column for multi-selection
             _tradesDataTable.Columns.Add("Symbol", typeof(string));
             _tradesDataTable.Columns.Add("Date", typeof(DateTime));
             _tradesDataTable.Columns.Add("Trade Seq", typeof(int));
             _tradesDataTable.Columns.Add("Previous Close", typeof(decimal));
             _tradesDataTable.Columns.Add("High After Volume Surge", typeof(decimal));
             _tradesDataTable.Columns.Add("Low After Volume Surge", typeof(decimal));
+            _tradesDataTable.Columns.Add("Low Before Volume Surge", typeof(decimal));
             _tradesDataTable.Columns.Add("Gap % (Close to High)", typeof(decimal));
             _tradesDataTable.Columns.Add("Gap % (High to Low)", typeof(decimal));
             _tradesDataTable.Columns.Add("Volume (M)", typeof(decimal));
+            _tradesDataTable.Columns.Add("Total Volume", typeof(long));
             _tradesDataTable.Columns.Add("Strategy", typeof(string));
             _tradesDataTable.Columns.Add("Float", typeof(decimal));
             _tradesDataTable.Columns.Add("Catalyst", typeof(string));
@@ -105,21 +108,30 @@ namespace TradingJournalGPT.Forms
             dataGridViewTrades.AllowUserToAddRows = false;
             dataGridViewTrades.ReadOnly = false; // Allow editing
             dataGridViewTrades.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            dataGridViewTrades.MultiSelect = false;
+            dataGridViewTrades.MultiSelect = true; // Enable multi-selection
+            
+            // Configure checkbox column for multi-selection
+            var selectColumn = dataGridViewTrades.Columns["Select"];
+            selectColumn.Width = 50;
+            selectColumn.HeaderText = "✓";
+            selectColumn.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            selectColumn.ReadOnly = false; // Allow editing checkboxes
             
             // Set specific columns as read-only
             dataGridViewTrades.Columns["Symbol"].ReadOnly = true;
             dataGridViewTrades.Columns["Date"].ReadOnly = true;
-            dataGridViewTrades.Columns["Trade Seq"].ReadOnly = true;
-            dataGridViewTrades.Columns["Gap % (Close to High)"].ReadOnly = true; // Calculated automatically
-            dataGridViewTrades.Columns["Gap % (High to Low)"].ReadOnly = true; // Calculated automatically
-            dataGridViewTrades.Columns["Float"].ReadOnly = true; // Float is read-only (from CSV data)
-            dataGridViewTrades.Columns["Chart"].ReadOnly = true;
             
             // Configure Chart column for image display
             var chartColumn = dataGridViewTrades.Columns["Chart"];
             chartColumn.Width = 100;
             chartColumn.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            
+            // Style Chart column to look like a button
+            chartColumn.DefaultCellStyle.BackColor = Color.LightBlue;
+            chartColumn.DefaultCellStyle.ForeColor = Color.DarkBlue;
+            chartColumn.DefaultCellStyle.Font = new Font(dataGridViewTrades.Font, FontStyle.Bold);
+            chartColumn.DefaultCellStyle.SelectionBackColor = Color.DarkBlue;
+            chartColumn.DefaultCellStyle.SelectionForeColor = Color.White;
             
             // Configure Strategy column
             var strategyColumn = dataGridViewTrades.Columns["Strategy"];
@@ -129,6 +141,11 @@ namespace TradingJournalGPT.Forms
             var floatColumn = dataGridViewTrades.Columns["Float"];
             floatColumn.Width = 80;
             floatColumn.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+            
+            // Configure Total Volume column
+            var totalVolumeColumn = dataGridViewTrades.Columns["Total Volume"];
+            totalVolumeColumn.Width = 100;
+            totalVolumeColumn.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
             
             // Configure Catalyst column
             var catalystColumn = dataGridViewTrades.Columns["Catalyst"];
@@ -145,6 +162,10 @@ namespace TradingJournalGPT.Forms
             dataGridViewTrades.DataError += DataGridViewTrades_DataError;
             dataGridViewTrades.CellClick += dataGridViewTrades_CellClick;
             dataGridViewTrades.MouseClick += DataGridViewTrades_MouseClick;
+            dataGridViewTrades.CellMouseEnter += DataGridViewTrades_CellMouseEnter;
+            dataGridViewTrades.CellMouseLeave += DataGridViewTrades_CellMouseLeave;
+            dataGridViewTrades.CellValueChanged += DataGridViewTrades_CellValueChanged; // For checkbox changes
+            dataGridViewTrades.SelectionChanged += DataGridViewTrades_SelectionChanged; // For multi-selection
             
             // Create context menu for delete functionality
             CreateContextMenu();
@@ -159,6 +180,7 @@ namespace TradingJournalGPT.Forms
         private void InitializeSetupsDataTable()
         {
             _setupsDataTable = new DataTable();
+            _setupsDataTable.Columns.Add("Select", typeof(bool)); // Checkbox column for multi-selection
             _setupsDataTable.Columns.Add("Strategy", typeof(string));
             _setupsDataTable.Columns.Add("Direction", typeof(string));
             _setupsDataTable.Columns.Add("Cycle", typeof(string));
@@ -178,13 +200,22 @@ namespace TradingJournalGPT.Forms
             dataGridViewSetups.AllowUserToAddRows = true;
             dataGridViewSetups.ReadOnly = false;
             dataGridViewSetups.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            dataGridViewSetups.MultiSelect = false;
+            dataGridViewSetups.MultiSelect = true; // Enable multi-selection
+            
+            // Configure checkbox column for multi-selection
+            var selectColumn = dataGridViewSetups.Columns["Select"];
+            selectColumn.Width = 50;
+            selectColumn.HeaderText = "✓";
+            selectColumn.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            selectColumn.ReadOnly = false; // Allow editing checkboxes
             
             // Add event handlers for setups
             dataGridViewSetups.CellEndEdit += DataGridViewSetups_CellEndEdit;
             dataGridViewSetups.KeyDown += DataGridViewSetups_KeyDown;
             dataGridViewSetups.DataError += DataGridViewSetups_DataError;
             dataGridViewSetups.MouseClick += DataGridViewSetups_MouseClick;
+            dataGridViewSetups.CellValueChanged += DataGridViewSetups_CellValueChanged; // For checkbox changes
+            dataGridViewSetups.SelectionChanged += DataGridViewSetups_SelectionChanged; // For multi-selection
 
             // Create context menu for setups
             CreateSetupsContextMenu();
@@ -196,6 +227,7 @@ namespace TradingJournalGPT.Forms
         private void InitializeTechnicalsDataTable()
         {
             _technicalsDataTable = new DataTable();
+            _technicalsDataTable.Columns.Add("Select", typeof(bool)); // Checkbox column for multi-selection
             _technicalsDataTable.Columns.Add("Type", typeof(string));
             _technicalsDataTable.Columns.Add("Description", typeof(string));
             _technicalsDataTable.Columns.Add("Examples", typeof(string));
@@ -205,13 +237,22 @@ namespace TradingJournalGPT.Forms
             dataGridViewTechnicals.AllowUserToAddRows = true;
             dataGridViewTechnicals.ReadOnly = false;
             dataGridViewTechnicals.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            dataGridViewTechnicals.MultiSelect = false;
+            dataGridViewTechnicals.MultiSelect = true; // Enable multi-selection
+            
+            // Configure checkbox column for multi-selection
+            var selectColumn = dataGridViewTechnicals.Columns["Select"];
+            selectColumn.Width = 50;
+            selectColumn.HeaderText = "✓";
+            selectColumn.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            selectColumn.ReadOnly = false; // Allow editing checkboxes
             
             // Add event handlers for technicals
             dataGridViewTechnicals.CellEndEdit += DataGridViewTechnicals_CellEndEdit;
             dataGridViewTechnicals.KeyDown += DataGridViewTechnicals_KeyDown;
             dataGridViewTechnicals.DataError += DataGridViewTechnicals_DataError;
             dataGridViewTechnicals.MouseClick += DataGridViewTechnicals_MouseClick;
+            dataGridViewTechnicals.CellValueChanged += DataGridViewTechnicals_CellValueChanged; // For checkbox changes
+            dataGridViewTechnicals.SelectionChanged += DataGridViewTechnicals_SelectionChanged; // For multi-selection
 
             // Create context menu for technicals
             CreateTechnicalsContextMenu();
@@ -472,6 +513,7 @@ namespace TradingJournalGPT.Forms
             foreach (var setup in _temporarySetups)
             {
                 var row = _setupsDataTable.NewRow();
+                row["Select"] = false; // Initialize checkbox as unchecked
                 foreach (var kvp in setup)
                 {
                     if (_setupsDataTable.Columns.Contains(kvp.Key))
@@ -507,9 +549,11 @@ namespace TradingJournalGPT.Forms
                             trade.PreviousDayClose,
                             trade.HighAfterVolumeSurge,
                             trade.LowAfterVolumeSurge,
+                            trade.LowBeforeVolumeSurge,
                             trade.GapPercentToHigh,
                             trade.GapPercentHighToLow,
                             trade.Volume / 1000000m,
+                            trade.TotalVolume,
                             trade.Setup,
                             trade.Float,
                             trade.Catalyst,
@@ -561,15 +605,18 @@ namespace TradingJournalGPT.Forms
                 foreach (var trade in _temporaryTrades)
                 {
                     _tradesDataTable.Rows.Add(
+                        false, // Checkbox column - initially unchecked
                         trade.Symbol,
                         trade.Date,
                         trade.TradeSeq,
                         trade.PreviousDayClose,
                         trade.HighAfterVolumeSurge,
                         trade.LowAfterVolumeSurge,
+                        trade.LowBeforeVolumeSurge,
                         trade.GapPercentToHigh,
                         trade.GapPercentHighToLow,
                         trade.Volume / 1000000m,
+                        trade.TotalVolume,
                         trade.Setup,
                         trade.Float,
                         trade.Catalyst,
@@ -774,6 +821,10 @@ namespace TradingJournalGPT.Forms
                     {
                         var tradeData = await _tradingJournalService.AnalyzeChartImage(imageFile);
                         
+                        // Add float data to the trade
+                        tradeData.Float = _floatDataService.GetFloat(tradeData.Symbol);
+                        Console.WriteLine($"Added float data for {tradeData.Symbol}: {tradeData.Float}");
+                        
                         // Record the trade automatically to local storage
                         await _tradingJournalService.RecordTrade(tradeData, true); // true = use local storage
                         
@@ -799,15 +850,18 @@ namespace TradingJournalGPT.Forms
                 foreach (var trade in _temporaryTrades.OrderByDescending(t => t.Date).ThenByDescending(t => t.TradeSeq))
                 {
                     _tradesDataTable.Rows.Add(
+                        false, // Checkbox column - initially unchecked
                         trade.Symbol,
                         trade.Date,
                         trade.TradeSeq,
                         trade.PreviousDayClose,
                         trade.HighAfterVolumeSurge,
                         trade.LowAfterVolumeSurge,
+                        trade.LowBeforeVolumeSurge,
                         trade.GapPercentToHigh,
                         trade.GapPercentHighToLow,
                         trade.Volume / 1000000m,
+                        trade.TotalVolume,
                         trade.Setup,
                         trade.Float,
                         trade.Catalyst,
@@ -877,6 +931,22 @@ namespace TradingJournalGPT.Forms
                 {
                     if (File.Exists(imagePath))
                     {
+                        // Provide visual feedback that the button was clicked
+                        dataGridViewTrades.Rows[e.RowIndex].Cells[e.ColumnIndex].Style.BackColor = Color.DarkBlue;
+                        dataGridViewTrades.Rows[e.RowIndex].Cells[e.ColumnIndex].Style.ForeColor = Color.White;
+                        
+                        // Reset the style after a short delay
+                        var timer = new System.Windows.Forms.Timer();
+                        timer.Interval = 150;
+                        timer.Tick += (s, args) =>
+                        {
+                            dataGridViewTrades.Rows[e.RowIndex].Cells[e.ColumnIndex].Style.BackColor = Color.LightBlue;
+                            dataGridViewTrades.Rows[e.RowIndex].Cells[e.ColumnIndex].Style.ForeColor = Color.DarkBlue;
+                            timer.Stop();
+                            timer.Dispose();
+                        };
+                        timer.Start();
+                        
                         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                         {
                             FileName = imagePath,
@@ -1193,7 +1263,13 @@ namespace TradingJournalGPT.Forms
         {
             if (e.KeyCode == Keys.Delete && dataGridViewTrades.SelectedRows.Count > 0)
             {
-                DeleteSelectedRow();
+                DeleteSelectedRows();
+            }
+            else if (e.Control && e.KeyCode == Keys.A)
+            {
+                // Ctrl+A to select all
+                SelectAllTrades();
+                e.Handled = true;
             }
         }
 
@@ -1322,9 +1398,11 @@ namespace TradingJournalGPT.Forms
                             PreviousDayClose = tradeToUpdate.PreviousDayClose,
                             HighAfterVolumeSurge = tradeToUpdate.HighAfterVolumeSurge,
                             LowAfterVolumeSurge = tradeToUpdate.LowAfterVolumeSurge,
+                            LowBeforeVolumeSurge = tradeToUpdate.LowBeforeVolumeSurge,
                             GapPercentToHigh = tradeToUpdate.GapPercentToHigh,
                             GapPercentHighToLow = tradeToUpdate.GapPercentHighToLow,
                             Volume = tradeToUpdate.Volume,
+                            TotalVolume = tradeToUpdate.TotalVolume,
                             Setup = tradeToUpdate.Setup,
                             Float = tradeToUpdate.Float,
                             Catalyst = tradeToUpdate.Catalyst,
@@ -1364,6 +1442,242 @@ namespace TradingJournalGPT.Forms
             }
         }
 
+        /// <summary>
+        /// Deletes multiple selected trades
+        /// </summary>
+        private void DeleteSelectedRows()
+        {
+            var selectedRows = dataGridViewTrades.SelectedRows.Cast<DataGridViewRow>().ToList();
+            if (selectedRows.Count == 0) return;
+
+            var message = selectedRows.Count == 1 
+                ? "Are you sure you want to delete this trade?" 
+                : $"Are you sure you want to delete {selectedRows.Count} selected trades?";
+            
+            var result = MessageBox.Show(message, "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+            if (result == DialogResult.Yes)
+            {
+                try
+                {
+                    var deletedTrades = new List<TradeData>();
+                    var rowsToRemove = new List<DataGridViewRow>();
+
+                    foreach (var selectedRow in selectedRows)
+                    {
+                        var symbol = selectedRow.Cells["Symbol"].Value?.ToString();
+                        var date = selectedRow.Cells["Date"].Value?.ToString();
+                        var tradeSeq = Convert.ToInt32(selectedRow.Cells["Trade Seq"].Value ?? 0);
+
+                        // Parse the date string properly
+                        DateTime parsedDate;
+                        if (!DateTime.TryParse(date, out parsedDate))
+                        {
+                            Console.WriteLine($"Warning: Could not parse date '{date}' for delete");
+                            continue;
+                        }
+
+                        // Find the trade in temporary state
+                        var tradeToDelete = _temporaryTrades.FirstOrDefault(t => 
+                            t.Symbol == symbol && 
+                            t.Date.Date == parsedDate.Date &&
+                            t.TradeSeq == tradeSeq);
+
+                        if (tradeToDelete != null)
+                        {
+                            Console.WriteLine($"Found trade to delete: {tradeToDelete.Symbol} on {tradeToDelete.Date:yyyy-MM-dd} with TradeSeq {tradeToDelete.TradeSeq}");
+                            
+                            deletedTrades.Add(tradeToDelete);
+                            rowsToRemove.Add(selectedRow);
+
+                            // Track deleted trade for image cleanup
+                            _deletedTrades.Add(tradeToDelete);
+
+                            // Remove from temporary state
+                            _temporaryTrades.Remove(tradeToDelete);
+                        }
+                    }
+
+                    // Remove rows from DataGridView
+                    foreach (var row in rowsToRemove)
+                    {
+                        dataGridViewTrades.Rows.Remove(row);
+                    }
+
+                    // Create undo actions for all deleted trades
+                    foreach (var deletedTrade in deletedTrades)
+                    {
+                        var undoAction = new DeleteTradeAction(deletedTrade, _temporaryTrades, _deletedTrades);
+                        AddUndoAction(undoAction);
+                    }
+
+                    // Mark as having unsaved changes
+                    SetUnsavedChanges(true);
+
+                    var successMessage = deletedTrades.Count == 1 
+                        ? "Trade deleted successfully! (Changes are temporary until saved)" 
+                        : $"{deletedTrades.Count} trades deleted successfully! (Changes are temporary until saved)";
+                    
+                    MessageBox.Show(successMessage, "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error deleting trades: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Updates float values for multiple selected trades
+        /// </summary>
+        private void UpdateFloatForSelectedTrades()
+        {
+            var selectedRows = dataGridViewTrades.SelectedRows.Cast<DataGridViewRow>().ToList();
+            if (selectedRows.Count == 0) return;
+
+            try
+            {
+                var updatedCount = 0;
+                var failedCount = 0;
+
+                foreach (var selectedRow in selectedRows)
+                {
+                    var symbol = selectedRow.Cells["Symbol"].Value?.ToString();
+                    var date = selectedRow.Cells["Date"].Value?.ToString();
+                    var tradeSeq = Convert.ToInt32(selectedRow.Cells["Trade Seq"].Value ?? 0);
+
+                    if (string.IsNullOrEmpty(symbol))
+                    {
+                        failedCount++;
+                        continue;
+                    }
+
+                    // Parse the date string properly
+                    DateTime parsedDate;
+                    if (!DateTime.TryParse(date, out parsedDate))
+                    {
+                        Console.WriteLine($"Warning: Could not parse date '{date}' for float update");
+                        failedCount++;
+                        continue;
+                    }
+
+                    // Find the trade in temporary state
+                    var tradeToUpdate = _temporaryTrades.FirstOrDefault(t => 
+                        t.Symbol == symbol && 
+                        t.Date.Date == parsedDate.Date &&
+                        t.TradeSeq == tradeSeq);
+
+                    if (tradeToUpdate != null)
+                    {
+                        // Get float value from service
+                        var floatValue = _floatDataService.GetFloat(symbol);
+                        
+                        // Check if we have valid float data (not 0, which indicates no data found)
+                        if (floatValue > 0)
+                        {
+                            // Create a copy of the original trade for undo
+                            var originalTrade = new TradeData
+                            {
+                                Symbol = tradeToUpdate.Symbol,
+                                Date = tradeToUpdate.Date,
+                                TradeSeq = tradeToUpdate.TradeSeq,
+                                PreviousDayClose = tradeToUpdate.PreviousDayClose,
+                                HighAfterVolumeSurge = tradeToUpdate.HighAfterVolumeSurge,
+                                LowAfterVolumeSurge = tradeToUpdate.LowAfterVolumeSurge,
+                                LowBeforeVolumeSurge = tradeToUpdate.LowBeforeVolumeSurge,
+                                GapPercentToHigh = tradeToUpdate.GapPercentToHigh,
+                                GapPercentHighToLow = tradeToUpdate.GapPercentHighToLow,
+                                Volume = tradeToUpdate.Volume,
+                                TotalVolume = tradeToUpdate.TotalVolume,
+                                Setup = tradeToUpdate.Setup,
+                                Float = tradeToUpdate.Float,
+                                Catalyst = tradeToUpdate.Catalyst,
+                                Technicals = tradeToUpdate.Technicals,
+                                ChartImagePath = tradeToUpdate.ChartImagePath
+                            };
+
+                            // Update the trade data
+                            tradeToUpdate.Float = floatValue;
+
+                            // Update the DataGridView cell
+                            selectedRow.Cells["Float"].Value = floatValue;
+
+                            // Create undo action for the edit
+                            var modifiedTrade = new TradeData
+                            {
+                                Symbol = tradeToUpdate.Symbol,
+                                Date = tradeToUpdate.Date,
+                                TradeSeq = tradeToUpdate.TradeSeq,
+                                PreviousDayClose = tradeToUpdate.PreviousDayClose,
+                                HighAfterVolumeSurge = tradeToUpdate.HighAfterVolumeSurge,
+                                LowAfterVolumeSurge = tradeToUpdate.LowAfterVolumeSurge,
+                                LowBeforeVolumeSurge = tradeToUpdate.LowBeforeVolumeSurge,
+                                GapPercentToHigh = tradeToUpdate.GapPercentToHigh,
+                                GapPercentHighToLow = tradeToUpdate.GapPercentHighToLow,
+                                Volume = tradeToUpdate.Volume,
+                                TotalVolume = tradeToUpdate.TotalVolume,
+                                Setup = tradeToUpdate.Setup,
+                                Float = tradeToUpdate.Float,
+                                Catalyst = tradeToUpdate.Catalyst,
+                                Technicals = tradeToUpdate.Technicals,
+                                ChartImagePath = tradeToUpdate.ChartImagePath
+                            };
+
+                            var undoAction = new EditTradeAction(originalTrade, modifiedTrade, _temporaryTrades);
+                            AddUndoAction(undoAction);
+
+                            updatedCount++;
+                            Console.WriteLine($"Updated float for {symbol}: {floatValue}");
+                        }
+                        else
+                        {
+                            failedCount++;
+                            Console.WriteLine($"No float data found for {symbol}");
+                        }
+                    }
+                }
+
+                // Mark as having unsaved changes
+                SetUnsavedChanges(true);
+
+                var message = $"Float update complete!\n\nUpdated: {updatedCount} trades";
+                if (failedCount > 0)
+                {
+                    message += $"\nFailed: {failedCount} trades (no float data available)";
+                }
+                
+                MessageBox.Show(message, "Float Update Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error updating float values: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// Selects all trades in the DataGridView
+        /// </summary>
+        private void SelectAllTrades()
+        {
+            foreach (DataGridViewRow row in dataGridViewTrades.Rows)
+            {
+                row.Selected = true;
+                row.Cells["Select"].Value = true;
+            }
+        }
+
+        /// <summary>
+        /// Deselects all trades in the DataGridView
+        /// </summary>
+        private void DeselectAllTrades()
+        {
+            foreach (DataGridViewRow row in dataGridViewTrades.Rows)
+            {
+                row.Selected = false;
+                row.Cells["Select"].Value = false;
+            }
+        }
+
         private void UpdateTradeInStorage(int rowIndex)
         {
             try
@@ -1396,9 +1710,11 @@ namespace TradingJournalGPT.Forms
                         PreviousDayClose = tradeToUpdate.PreviousDayClose,
                         HighAfterVolumeSurge = tradeToUpdate.HighAfterVolumeSurge,
                         LowAfterVolumeSurge = tradeToUpdate.LowAfterVolumeSurge,
+                        LowBeforeVolumeSurge = tradeToUpdate.LowBeforeVolumeSurge,
                         GapPercentToHigh = tradeToUpdate.GapPercentToHigh,
                         GapPercentHighToLow = tradeToUpdate.GapPercentHighToLow,
                         Volume = tradeToUpdate.Volume,
+                        TotalVolume = tradeToUpdate.TotalVolume,
                         Setup = tradeToUpdate.Setup,
                         Float = tradeToUpdate.Float,
                         Catalyst = tradeToUpdate.Catalyst,
@@ -1410,6 +1726,7 @@ namespace TradingJournalGPT.Forms
                     tradeToUpdate.PreviousDayClose = Convert.ToDecimal(dataGridViewTrades.Rows[rowIndex].Cells["Previous Close"].Value ?? 0m);
                     tradeToUpdate.HighAfterVolumeSurge = Convert.ToDecimal(dataGridViewTrades.Rows[rowIndex].Cells["High After Volume Surge"].Value ?? 0m);
                     tradeToUpdate.LowAfterVolumeSurge = Convert.ToDecimal(dataGridViewTrades.Rows[rowIndex].Cells["Low After Volume Surge"].Value ?? 0m);
+                    tradeToUpdate.LowBeforeVolumeSurge = Convert.ToDecimal(dataGridViewTrades.Rows[rowIndex].Cells["Low Before Volume Surge"].Value ?? 0m);
                     
                     // Calculate gap percentages dynamically based on current values
                     RecalculateGapPercentages(tradeToUpdate);
@@ -1419,6 +1736,7 @@ namespace TradingJournalGPT.Forms
                     dataGridViewTrades.Rows[rowIndex].Cells["Gap % (High to Low)"].Value = tradeToUpdate.GapPercentHighToLow;
                     
                     tradeToUpdate.Volume = Convert.ToInt64((Convert.ToDecimal(dataGridViewTrades.Rows[rowIndex].Cells["Volume (M)"].Value ?? 0m) * 1000000m));
+                                         tradeToUpdate.TotalVolume = Convert.ToInt64(dataGridViewTrades.Rows[rowIndex].Cells["Total Volume"].Value ?? 0L);
                     
                     // Update Strategy field
                     var strategyValue = dataGridViewTrades.Rows[rowIndex].Cells["Strategy"].Value?.ToString() ?? "";
@@ -1443,9 +1761,11 @@ namespace TradingJournalGPT.Forms
                         PreviousDayClose = tradeToUpdate.PreviousDayClose,
                         HighAfterVolumeSurge = tradeToUpdate.HighAfterVolumeSurge,
                         LowAfterVolumeSurge = tradeToUpdate.LowAfterVolumeSurge,
+                        LowBeforeVolumeSurge = tradeToUpdate.LowBeforeVolumeSurge,
                         GapPercentToHigh = tradeToUpdate.GapPercentToHigh,
                         GapPercentHighToLow = tradeToUpdate.GapPercentHighToLow,
                         Volume = tradeToUpdate.Volume,
+                        TotalVolume = tradeToUpdate.TotalVolume,
                         Setup = tradeToUpdate.Setup,
                         Float = tradeToUpdate.Float,
                         Catalyst = tradeToUpdate.Catalyst,
@@ -1535,25 +1855,50 @@ namespace TradingJournalGPT.Forms
         private void CreateContextMenu()
         {
             _contextMenu = new ContextMenuStrip();
-            var deleteItem = new ToolStripMenuItem("Delete Trade");
-            deleteItem.Click += (sender, e) => DeleteSelectedRow();
+            
+            // Delete option - works for single or multiple selections
+            var deleteItem = new ToolStripMenuItem("Delete Trade(s)");
+            deleteItem.Click += (sender, e) => DeleteSelectedRows();
             _contextMenu.Items.Add(deleteItem);
             
             // Add separator
             _contextMenu.Items.Add(new ToolStripSeparator());
             
-            // Add Update Float option
+            // Add Update Float option - works for single or multiple selections
             var updateFloatItem = new ToolStripMenuItem("Update Float");
-            updateFloatItem.Click += (sender, e) => UpdateFloatForSelectedTrade();
+            updateFloatItem.Click += (sender, e) => UpdateFloatForSelectedTrades();
             _contextMenu.Items.Add(updateFloatItem);
+            
+            // Add separator
+            _contextMenu.Items.Add(new ToolStripSeparator());
+            
+            // Add Select All option
+            var selectAllItem = new ToolStripMenuItem("Select All");
+            selectAllItem.Click += (sender, e) => SelectAllTrades();
+            _contextMenu.Items.Add(selectAllItem);
+            
+            // Add Deselect All option
+            var deselectAllItem = new ToolStripMenuItem("Deselect All");
+            deselectAllItem.Click += (sender, e) => DeselectAllTrades();
+            _contextMenu.Items.Add(deselectAllItem);
         }
 
         private void CreateSetupsContextMenu()
         {
             _setupsContextMenu = new ContextMenuStrip();
-            var deleteItem = new ToolStripMenuItem("Delete Setup");
-            deleteItem.Click += (sender, e) => DeleteSelectedSetupRow();
+            var deleteItem = new ToolStripMenuItem("Delete Setup(s)");
+            deleteItem.Click += (sender, e) => DeleteSelectedSetupRows();
             _setupsContextMenu.Items.Add(deleteItem);
+            
+            _setupsContextMenu.Items.Add(new ToolStripSeparator());
+            
+            var selectAllItem = new ToolStripMenuItem("Select All");
+            selectAllItem.Click += (sender, e) => SelectAllSetups();
+            _setupsContextMenu.Items.Add(selectAllItem);
+            
+            var deselectAllItem = new ToolStripMenuItem("Deselect All");
+            deselectAllItem.Click += (sender, e) => DeselectAllSetups();
+            _setupsContextMenu.Items.Add(deselectAllItem);
         }
 
         private void DeleteSelectedSetupRow()
@@ -1613,6 +1958,91 @@ namespace TradingJournalGPT.Forms
             }
         }
 
+        private void DeleteSelectedSetupRows()
+        {
+            var selectedRows = dataGridViewSetups.SelectedRows.Cast<DataGridViewRow>().ToList();
+            if (selectedRows.Count == 0) return;
+
+            var result = MessageBox.Show(
+                $"Are you sure you want to delete {selectedRows.Count} selected setup(s)?",
+                "Confirm Delete",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+
+            if (result == DialogResult.Yes)
+            {
+                try
+                {
+                    var setupsToDelete = new List<Dictionary<string, object>>();
+                    var deletedStrategyNames = new List<string>();
+
+                    // Collect all setups to delete (in reverse order to maintain indices)
+                    foreach (var selectedRow in selectedRows.OrderByDescending(r => r.Index))
+                    {
+                        var setupToDelete = new Dictionary<string, object>();
+                        for (int i = 0; i < _setupsDataTable.Columns.Count; i++)
+                        {
+                            var col = _setupsDataTable.Columns[i];
+                            setupToDelete[col.ColumnName] = selectedRow.Cells[i].Value ?? "";
+                        }
+                        
+                        var deletedStrategyName = setupToDelete.ContainsKey("Strategy") ? setupToDelete["Strategy"]?.ToString() ?? "" : "";
+                        if (!string.IsNullOrEmpty(deletedStrategyName))
+                        {
+                            deletedStrategyNames.Add(deletedStrategyName);
+                        }
+                        
+                        setupsToDelete.Add(setupToDelete);
+                        _temporarySetups.RemoveAt(selectedRow.Index);
+                        _deletedSetups.Add(setupToDelete);
+                    }
+
+                    // Add undo action for all deleted setups
+                    foreach (var setupToDelete in setupsToDelete)
+                    {
+                        var deleteAction = new DeleteSetupAction(setupToDelete, _temporarySetups, _deletedSetups);
+                        AddUndoAction(deleteAction);
+                    }
+
+                    // Clear strategy references in trades for all deleted strategies
+                    foreach (var deletedStrategyName in deletedStrategyNames)
+                    {
+                        ClearTradesForDeletedStrategy(deletedStrategyName);
+                    }
+
+                    // Refresh display
+                    RefreshSetupsDisplay();
+
+                    // Mark as having unsaved changes
+                    SetUnsavedChanges(true);
+
+                    MessageBox.Show($"{selectedRows.Count} setup(s) deleted successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error deleting setups: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        private void SelectAllSetups()
+        {
+            foreach (DataGridViewRow row in dataGridViewSetups.Rows)
+            {
+                row.Selected = true;
+                row.Cells["Select"].Value = true;
+            }
+        }
+
+        private void DeselectAllSetups()
+        {
+            foreach (DataGridViewRow row in dataGridViewSetups.Rows)
+            {
+                row.Selected = false;
+                row.Cells["Select"].Value = false;
+            }
+        }
+
         private void DataGridViewTrades_MouseClick(object? sender, MouseEventArgs e)
         {
             if (e.Button == MouseButtons.Right)
@@ -1620,8 +2050,15 @@ namespace TradingJournalGPT.Forms
                 var hit = dataGridViewTrades.HitTest(e.X, e.Y);
                 if (hit.RowIndex >= 0)
                 {
-                    dataGridViewTrades.ClearSelection();
-                    dataGridViewTrades.Rows[hit.RowIndex].Selected = true;
+                    // If the clicked row is not already selected, select only that row
+                    // If it is already selected, keep all current selections
+                    var clickedRow = dataGridViewTrades.Rows[hit.RowIndex];
+                    if (!clickedRow.Selected)
+                    {
+                        dataGridViewTrades.ClearSelection();
+                        clickedRow.Selected = true;
+                    }
+                    
                     _contextMenu.Show(dataGridViewTrades, e.Location);
                 }
             }
@@ -1632,10 +2069,10 @@ namespace TradingJournalGPT.Forms
             if (e.ColumnIndex == dataGridViewTrades.Columns["Chart"].Index && e.Value != null)
             {
                 var imagePath = e.Value.ToString();
-                if (!string.IsNullOrEmpty(imagePath) && File.Exists(imagePath))
+                if (!string.IsNullOrEmpty(imagePath) && imagePath != "No Image" && File.Exists(imagePath))
                 {
-                    // Just show "View Chart" text instead of thumbnail to avoid formatting errors
-                    e.Value = "View Chart";
+                    // Display button-like text while keeping the file path as the actual value
+                    e.Value = "📊 View Chart";
                     e.FormattingApplied = true;
                 }
                 else
@@ -1653,6 +2090,64 @@ namespace TradingJournalGPT.Forms
             {
                 e.ThrowException = false;
                 Console.WriteLine($"DataGridView formatting error in column {e.ColumnIndex}, row {e.RowIndex}: {e.Exception.Message}");
+            }
+        }
+
+        private void DataGridViewTrades_CellMouseEnter(object? sender, DataGridViewCellEventArgs e)
+        {
+            if (e.ColumnIndex == dataGridViewTrades.Columns["Chart"].Index && e.RowIndex >= 0)
+            {
+                var imagePath = dataGridViewTrades.Rows[e.RowIndex].Cells[e.ColumnIndex].Value?.ToString();
+                if (!string.IsNullOrEmpty(imagePath) && imagePath != "No Image" && File.Exists(imagePath))
+                {
+                    // Change cursor to hand pointer and highlight the button
+                    dataGridViewTrades.Cursor = Cursors.Hand;
+                    dataGridViewTrades.Rows[e.RowIndex].Cells[e.ColumnIndex].Style.BackColor = Color.DarkBlue;
+                    dataGridViewTrades.Rows[e.RowIndex].Cells[e.ColumnIndex].Style.ForeColor = Color.White;
+                }
+            }
+        }
+
+        private void DataGridViewTrades_CellMouseLeave(object? sender, DataGridViewCellEventArgs e)
+        {
+            if (e.ColumnIndex == dataGridViewTrades.Columns["Chart"].Index && e.RowIndex >= 0)
+            {
+                // Reset cursor and button appearance
+                dataGridViewTrades.Cursor = Cursors.Default;
+                dataGridViewTrades.Rows[e.RowIndex].Cells[e.ColumnIndex].Style.BackColor = Color.LightBlue;
+                dataGridViewTrades.Rows[e.RowIndex].Cells[e.ColumnIndex].Style.ForeColor = Color.DarkBlue;
+            }
+        }
+
+        private void DataGridViewTrades_CellValueChanged(object? sender, DataGridViewCellEventArgs e)
+        {
+            // Handle checkbox changes for multi-selection
+            if (e.ColumnIndex == dataGridViewTrades.Columns["Select"].Index && e.RowIndex >= 0)
+            {
+                var isChecked = Convert.ToBoolean(dataGridViewTrades.Rows[e.RowIndex].Cells[e.ColumnIndex].Value ?? false);
+                
+                if (isChecked)
+                {
+                    // Select the row when checkbox is checked
+                    dataGridViewTrades.Rows[e.RowIndex].Selected = true;
+                }
+                else
+                {
+                    // Deselect the row when checkbox is unchecked
+                    dataGridViewTrades.Rows[e.RowIndex].Selected = false;
+                }
+            }
+        }
+
+        private void DataGridViewTrades_SelectionChanged(object? sender, EventArgs e)
+        {
+            // Update checkboxes based on row selection
+            foreach (DataGridViewRow row in dataGridViewTrades.Rows)
+            {
+                if (row.Cells["Select"] != null)
+                {
+                    row.Cells["Select"].Value = row.Selected;
+                }
             }
         }
 
@@ -1691,7 +2186,13 @@ namespace TradingJournalGPT.Forms
             }
             else if (e.KeyCode == Keys.Delete && dataGridViewSetups.SelectedRows.Count > 0)
             {
-                DeleteSelectedSetupRow();
+                DeleteSelectedSetupRows();
+                e.Handled = true;
+            }
+            else if (e.Control && e.KeyCode == Keys.A)
+            {
+                SelectAllSetups();
+                e.Handled = true;
             }
         }
 
@@ -1708,10 +2209,35 @@ namespace TradingJournalGPT.Forms
                 var hit = dataGridViewSetups.HitTest(e.X, e.Y);
                 if (hit.RowIndex >= 0)
                 {
-                    dataGridViewSetups.ClearSelection();
-                    dataGridViewSetups.Rows[hit.RowIndex].Selected = true;
+                    // If the clicked row is not already selected, select only that row
+                    // If it is already selected, keep all current selections
+                    var clickedRow = dataGridViewSetups.Rows[hit.RowIndex];
+                    if (!clickedRow.Selected)
+                    {
+                        dataGridViewSetups.ClearSelection();
+                        clickedRow.Selected = true;
+                    }
+                    
                     _setupsContextMenu.Show(dataGridViewSetups, e.Location);
                 }
+            }
+        }
+
+        private void DataGridViewSetups_CellValueChanged(object? sender, DataGridViewCellEventArgs e)
+        {
+            if (e.ColumnIndex == dataGridViewSetups.Columns["Select"].Index && e.RowIndex >= 0)
+            {
+                var isChecked = Convert.ToBoolean(dataGridViewSetups.Rows[e.RowIndex].Cells[e.ColumnIndex].Value ?? false);
+                if (isChecked) { dataGridViewSetups.Rows[e.RowIndex].Selected = true; }
+                else { dataGridViewSetups.Rows[e.RowIndex].Selected = false; }
+            }
+        }
+
+        private void DataGridViewSetups_SelectionChanged(object? sender, EventArgs e)
+        {
+            foreach (DataGridViewRow row in dataGridViewSetups.Rows)
+            {
+                if (row.Cells["Select"] != null) { row.Cells["Select"].Value = row.Selected; }
             }
         }
 
@@ -2565,21 +3091,33 @@ namespace TradingJournalGPT.Forms
         {
             if (dataGridViewTrades.SelectedRows.Count > 0)
             {
-                var selectedRow = dataGridViewTrades.SelectedRows[0];
-                var tradeData = new
-                {
-                    Symbol = selectedRow.Cells["Symbol"].Value?.ToString(),
-                    Date = selectedRow.Cells["Date"].Value?.ToString(),
-                    TradeSeq = selectedRow.Cells["Trade Seq"].Value?.ToString(),
-                    PreviousClose = selectedRow.Cells["Previous Close"].Value?.ToString(),
-                    HighAfterVolumeSurge = selectedRow.Cells["High After Volume Surge"].Value?.ToString(),
-                    LowAfterVolumeSurge = selectedRow.Cells["Low After Volume Surge"].Value?.ToString(),
-                    GapPercentToHigh = selectedRow.Cells["Gap % (Close to High)"].Value?.ToString(),
-                    GapPercentHighToLow = selectedRow.Cells["Gap % (High to Low)"].Value?.ToString(),
-                    Volume = selectedRow.Cells["Volume (M)"].Value?.ToString()
-                };
+                var selectedRows = dataGridViewTrades.SelectedRows.Cast<DataGridViewRow>().ToList();
+                var tradeDataList = new List<object>();
 
-                var json = System.Text.Json.JsonSerializer.Serialize(tradeData, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                foreach (var selectedRow in selectedRows)
+                {
+                    var tradeData = new
+                    {
+                        Symbol = selectedRow.Cells["Symbol"].Value?.ToString(),
+                        Date = selectedRow.Cells["Date"].Value?.ToString(),
+                        TradeSeq = selectedRow.Cells["Trade Seq"].Value?.ToString(),
+                        PreviousClose = selectedRow.Cells["Previous Close"].Value?.ToString(),
+                        HighAfterVolumeSurge = selectedRow.Cells["High After Volume Surge"].Value?.ToString(),
+                        LowAfterVolumeSurge = selectedRow.Cells["Low After Volume Surge"].Value?.ToString(),
+                        LowBeforeVolumeSurge = selectedRow.Cells["Low Before Volume Surge"].Value?.ToString(),
+                        GapPercentToHigh = selectedRow.Cells["Gap % (Close to High)"].Value?.ToString(),
+                        GapPercentHighToLow = selectedRow.Cells["Gap % (High to Low)"].Value?.ToString(),
+                        Volume = selectedRow.Cells["Volume (M)"].Value?.ToString(),
+                        TotalVolume = selectedRow.Cells["Total Volume"].Value?.ToString(),
+                        Strategy = selectedRow.Cells["Strategy"].Value?.ToString(),
+                        Float = selectedRow.Cells["Float"].Value?.ToString(),
+                        Catalyst = selectedRow.Cells["Catalyst"].Value?.ToString(),
+                        Technicals = selectedRow.Cells["Technicals"].Value?.ToString()
+                    };
+                    tradeDataList.Add(tradeData);
+                }
+
+                var json = System.Text.Json.JsonSerializer.Serialize(tradeDataList, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
                 Clipboard.SetText(json);
             }
         }
@@ -2590,12 +3128,12 @@ namespace TradingJournalGPT.Forms
             var csv = new System.Text.StringBuilder();
             
             // Add headers
-            csv.AppendLine("Symbol,Date,Trade Seq,Previous Close,High After Volume Surge,Low After Volume Surge,Gap % (Close to High),Gap % (High to Low),Volume (M),Strategy,Float,Catalyst,Technicals");
+            csv.AppendLine("Symbol,Date,Trade Seq,Previous Close,High After Volume Surge,Low After Volume Surge,Low Before Volume Surge,Gap % (Close to High),Gap % (High to Low),Volume (M),Total Volume,Strategy,Float,Catalyst,Technicals");
             
             // Add data rows
             foreach (var row in trades)
             {
-                csv.AppendLine($"{row["Symbol"]},{row["Date"]},{row["Trade Seq"]},{row["Previous Close"]},{row["High After Volume Surge"]},{row["Low After Volume Surge"]},{row["Gap % (Close to High)"]},{row["Gap % (High to Low)"]},{row["Volume (M)"]},{row["Strategy"]},{row["Float"]},{row["Catalyst"]},{row["Technicals"]}");
+                csv.AppendLine($"{row["Symbol"]},{row["Date"]},{row["Trade Seq"]},{row["Previous Close"]},{row["High After Volume Surge"]},{row["Low After Volume Surge"]},{row["Low Before Volume Surge"]},{row["Gap % (Close to High)"]},{row["Gap % (High to Low)"]},{row["Volume (M)"]},{row["Total Volume"]},{row["Strategy"]},{row["Float"]},{row["Catalyst"]},{row["Technicals"]}");
             }
             
             File.WriteAllText(filePath, csv.ToString());
@@ -2618,17 +3156,19 @@ namespace TradingJournalGPT.Forms
                 tradesWorksheet.Cells[1, 4].Value = "Previous Close";
                 tradesWorksheet.Cells[1, 5].Value = "High After Volume Surge";
                 tradesWorksheet.Cells[1, 6].Value = "Low After Volume Surge";
-                tradesWorksheet.Cells[1, 7].Value = "Gap % (Close to High)";
-                tradesWorksheet.Cells[1, 8].Value = "Gap % (High to Low)";
-                tradesWorksheet.Cells[1, 9].Value = "Volume (M)";
-                tradesWorksheet.Cells[1, 10].Value = "Strategy";
-                tradesWorksheet.Cells[1, 11].Value = "Float";
-                tradesWorksheet.Cells[1, 12].Value = "Catalyst";
-                tradesWorksheet.Cells[1, 13].Value = "Technicals";
-                tradesWorksheet.Cells[1, 14].Value = "Chart Image Path";
+                tradesWorksheet.Cells[1, 7].Value = "Low Before Volume Surge";
+                tradesWorksheet.Cells[1, 8].Value = "Gap % (Close to High)";
+                tradesWorksheet.Cells[1, 9].Value = "Gap % (High to Low)";
+                tradesWorksheet.Cells[1, 10].Value = "Volume (M)";
+                tradesWorksheet.Cells[1, 11].Value = "Total Volume";
+                tradesWorksheet.Cells[1, 12].Value = "Strategy";
+                tradesWorksheet.Cells[1, 13].Value = "Float";
+                tradesWorksheet.Cells[1, 14].Value = "Catalyst";
+                tradesWorksheet.Cells[1, 15].Value = "Technicals";
+                tradesWorksheet.Cells[1, 16].Value = "Chart Image Path";
 
                 // Style the header row
-                using (var range = tradesWorksheet.Cells[1, 1, 1, 14])
+                using (var range = tradesWorksheet.Cells[1, 1, 1, 16])
                 {
                     range.Style.Font.Bold = true;
                     range.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
@@ -2645,14 +3185,16 @@ namespace TradingJournalGPT.Forms
                     tradesWorksheet.Cells[row, 4].Value = trade.PreviousDayClose;
                     tradesWorksheet.Cells[row, 5].Value = trade.HighAfterVolumeSurge;
                     tradesWorksheet.Cells[row, 6].Value = trade.LowAfterVolumeSurge;
-                    tradesWorksheet.Cells[row, 7].Value = trade.GapPercentToHigh;
-                    tradesWorksheet.Cells[row, 8].Value = trade.GapPercentHighToLow;
-                    tradesWorksheet.Cells[row, 9].Value = trade.Volume / 1000000m;
-                    tradesWorksheet.Cells[row, 10].Value = trade.Setup;
-                    tradesWorksheet.Cells[row, 11].Value = trade.Float;
-                    tradesWorksheet.Cells[row, 12].Value = trade.Catalyst;
-                    tradesWorksheet.Cells[row, 13].Value = trade.Technicals;
-                    tradesWorksheet.Cells[row, 14].Value = trade.ChartImagePath;
+                    tradesWorksheet.Cells[row, 7].Value = trade.LowBeforeVolumeSurge;
+                    tradesWorksheet.Cells[row, 8].Value = trade.GapPercentToHigh;
+                    tradesWorksheet.Cells[row, 9].Value = trade.GapPercentHighToLow;
+                    tradesWorksheet.Cells[row, 10].Value = trade.Volume / 1000000m;
+                    tradesWorksheet.Cells[row, 11].Value = trade.TotalVolume / 1000000m;
+                    tradesWorksheet.Cells[row, 12].Value = trade.Setup;
+                    tradesWorksheet.Cells[row, 13].Value = trade.Float;
+                    tradesWorksheet.Cells[row, 14].Value = trade.Catalyst;
+                    tradesWorksheet.Cells[row, 15].Value = trade.Technicals;
+                    tradesWorksheet.Cells[row, 16].Value = trade.ChartImagePath;
                     row++;
                 }
 
@@ -2724,6 +3266,7 @@ namespace TradingJournalGPT.Forms
                 foreach (var technical in _temporaryTechnicals)
                 {
                     _technicalsDataTable.Rows.Add(
+                        false, // Initialize checkbox as unchecked
                         technical.ContainsKey("Type") ? technical["Type"]?.ToString() ?? "" : "",
                         technical.ContainsKey("Description") ? technical["Description"]?.ToString() ?? "" : "",
                         technical.ContainsKey("Examples") ? technical["Examples"]?.ToString() ?? "" : ""
@@ -2741,9 +3284,19 @@ namespace TradingJournalGPT.Forms
         private void CreateTechnicalsContextMenu()
         {
             _technicalsContextMenu = new ContextMenuStrip();
-            var deleteItem = new ToolStripMenuItem("Delete Technical");
-            deleteItem.Click += (sender, e) => DeleteSelectedTechnicalRow();
+            var deleteItem = new ToolStripMenuItem("Delete Technical(s)");
+            deleteItem.Click += (sender, e) => DeleteSelectedTechnicalRows();
             _technicalsContextMenu.Items.Add(deleteItem);
+            
+            _technicalsContextMenu.Items.Add(new ToolStripSeparator());
+            
+            var selectAllItem = new ToolStripMenuItem("Select All");
+            selectAllItem.Click += (sender, e) => SelectAllTechnicals();
+            _technicalsContextMenu.Items.Add(selectAllItem);
+            
+            var deselectAllItem = new ToolStripMenuItem("Deselect All");
+            deselectAllItem.Click += (sender, e) => DeselectAllTechnicals();
+            _technicalsContextMenu.Items.Add(deselectAllItem);
         }
 
         private void DeleteSelectedTechnicalRow()
@@ -2803,6 +3356,91 @@ namespace TradingJournalGPT.Forms
             }
         }
 
+        private void DeleteSelectedTechnicalRows()
+        {
+            var selectedRows = dataGridViewTechnicals.SelectedRows.Cast<DataGridViewRow>().ToList();
+            if (selectedRows.Count == 0) return;
+
+            var result = MessageBox.Show(
+                $"Are you sure you want to delete {selectedRows.Count} selected technical(s)?",
+                "Confirm Delete",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+
+            if (result == DialogResult.Yes)
+            {
+                try
+                {
+                    var technicalsToDelete = new List<Dictionary<string, object>>();
+                    var deletedTechnicalNames = new List<string>();
+
+                    // Collect all technicals to delete (in reverse order to maintain indices)
+                    foreach (var selectedRow in selectedRows.OrderByDescending(r => r.Index))
+                    {
+                        var technicalToDelete = new Dictionary<string, object>();
+                        for (int i = 0; i < _technicalsDataTable.Columns.Count; i++)
+                        {
+                            var col = _technicalsDataTable.Columns[i];
+                            technicalToDelete[col.ColumnName] = selectedRow.Cells[i].Value ?? "";
+                        }
+                        
+                        var deletedTechnicalName = technicalToDelete.ContainsKey("Type") ? technicalToDelete["Type"]?.ToString() ?? "" : "";
+                        if (!string.IsNullOrEmpty(deletedTechnicalName))
+                        {
+                            deletedTechnicalNames.Add(deletedTechnicalName);
+                        }
+                        
+                        technicalsToDelete.Add(technicalToDelete);
+                        _temporaryTechnicals.RemoveAt(selectedRow.Index);
+                        _deletedTechnicals.Add(technicalToDelete);
+                    }
+
+                    // Add undo action for all deleted technicals
+                    foreach (var technicalToDelete in technicalsToDelete)
+                    {
+                        var deleteAction = new DeleteTechnicalAction(technicalToDelete, _temporaryTechnicals, _deletedTechnicals);
+                        AddUndoAction(deleteAction);
+                    }
+
+                    // Clear trades that reference any of the deleted technical types
+                    foreach (var deletedTechnicalName in deletedTechnicalNames)
+                    {
+                        ClearTradesForDeletedTechnical(deletedTechnicalName);
+                    }
+
+                    // Refresh display
+                    RefreshTechnicalsDisplay();
+
+                    // Mark as having unsaved changes
+                    SetUnsavedChanges(true);
+
+                    MessageBox.Show($"{selectedRows.Count} technical(s) deleted successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error deleting technicals: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        private void SelectAllTechnicals()
+        {
+            foreach (DataGridViewRow row in dataGridViewTechnicals.Rows)
+            {
+                row.Selected = true;
+                row.Cells["Select"].Value = true;
+            }
+        }
+
+        private void DeselectAllTechnicals()
+        {
+            foreach (DataGridViewRow row in dataGridViewTechnicals.Rows)
+            {
+                row.Selected = false;
+                row.Cells["Select"].Value = false;
+            }
+        }
+
         private void DataGridViewTechnicals_CellEndEdit(object? sender, DataGridViewCellEventArgs e)
         {
             try
@@ -2837,9 +3475,14 @@ namespace TradingJournalGPT.Forms
 
         private void DataGridViewTechnicals_KeyDown(object? sender, KeyEventArgs e)
         {
-            if (e.KeyCode == Keys.Delete)
+            if (e.KeyCode == Keys.Delete && dataGridViewTechnicals.SelectedRows.Count > 0)
             {
-                DeleteSelectedTechnicalRow();
+                DeleteSelectedTechnicalRows();
+                e.Handled = true;
+            }
+            else if (e.Control && e.KeyCode == Keys.A)
+            {
+                SelectAllTechnicals();
                 e.Handled = true;
             }
         }
@@ -2856,10 +3499,35 @@ namespace TradingJournalGPT.Forms
                 var hit = dataGridViewTechnicals.HitTest(e.X, e.Y);
                 if (hit.RowIndex >= 0)
                 {
-                    dataGridViewTechnicals.ClearSelection();
-                    dataGridViewTechnicals.Rows[hit.RowIndex].Selected = true;
+                    // If the clicked row is not already selected, select only that row
+                    // If it is already selected, keep all current selections
+                    var clickedRow = dataGridViewTechnicals.Rows[hit.RowIndex];
+                    if (!clickedRow.Selected)
+                    {
+                        dataGridViewTechnicals.ClearSelection();
+                        clickedRow.Selected = true;
+                    }
+                    
                     _technicalsContextMenu.Show(dataGridViewTechnicals, e.Location);
                 }
+            }
+        }
+
+        private void DataGridViewTechnicals_CellValueChanged(object? sender, DataGridViewCellEventArgs e)
+        {
+            if (e.ColumnIndex == dataGridViewTechnicals.Columns["Select"].Index && e.RowIndex >= 0)
+            {
+                var isChecked = Convert.ToBoolean(dataGridViewTechnicals.Rows[e.RowIndex].Cells[e.ColumnIndex].Value ?? false);
+                if (isChecked) { dataGridViewTechnicals.Rows[e.RowIndex].Selected = true; }
+                else { dataGridViewTechnicals.Rows[e.RowIndex].Selected = false; }
+            }
+        }
+
+        private void DataGridViewTechnicals_SelectionChanged(object? sender, EventArgs e)
+        {
+            foreach (DataGridViewRow row in dataGridViewTechnicals.Rows)
+            {
+                if (row.Cells["Select"] != null) { row.Cells["Select"].Value = row.Selected; }
             }
         }
     }
@@ -2967,9 +3635,11 @@ namespace TradingJournalGPT.Forms
                     tradeToRestore.PreviousDayClose = _originalTrade.PreviousDayClose;
                     tradeToRestore.HighAfterVolumeSurge = _originalTrade.HighAfterVolumeSurge;
                     tradeToRestore.LowAfterVolumeSurge = _originalTrade.LowAfterVolumeSurge;
+                    tradeToRestore.LowBeforeVolumeSurge = _originalTrade.LowBeforeVolumeSurge;
                     tradeToRestore.GapPercentToHigh = _originalTrade.GapPercentToHigh;
                     tradeToRestore.GapPercentHighToLow = _originalTrade.GapPercentHighToLow;
                     tradeToRestore.Volume = _originalTrade.Volume;
+                    tradeToRestore.TotalVolume = _originalTrade.TotalVolume;
                     tradeToRestore.Setup = _originalTrade.Setup;
                     tradeToRestore.Float = _originalTrade.Float;
                     tradeToRestore.Catalyst = _originalTrade.Catalyst;
@@ -3003,9 +3673,11 @@ namespace TradingJournalGPT.Forms
                     tradeToModify.PreviousDayClose = _modifiedTrade.PreviousDayClose;
                     tradeToModify.HighAfterVolumeSurge = _modifiedTrade.HighAfterVolumeSurge;
                     tradeToModify.LowAfterVolumeSurge = _modifiedTrade.LowAfterVolumeSurge;
+                    tradeToModify.LowBeforeVolumeSurge = _modifiedTrade.LowBeforeVolumeSurge;
                     tradeToModify.GapPercentToHigh = _modifiedTrade.GapPercentToHigh;
                     tradeToModify.GapPercentHighToLow = _modifiedTrade.GapPercentHighToLow;
                     tradeToModify.Volume = _modifiedTrade.Volume;
+                    tradeToModify.TotalVolume = _modifiedTrade.TotalVolume;
                     tradeToModify.Setup = _modifiedTrade.Setup;
                     tradeToModify.Float = _modifiedTrade.Float;
                     tradeToModify.Catalyst = _modifiedTrade.Catalyst;
