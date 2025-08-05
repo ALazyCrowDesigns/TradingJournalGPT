@@ -111,6 +111,8 @@ namespace TradingJournalGPT.Forms
             dataGridViewTrades.Columns["Symbol"].ReadOnly = true;
             dataGridViewTrades.Columns["Date"].ReadOnly = true;
             dataGridViewTrades.Columns["Trade Seq"].ReadOnly = true;
+            dataGridViewTrades.Columns["Gap % (Close to High)"].ReadOnly = true; // Calculated automatically
+            dataGridViewTrades.Columns["Gap % (High to Low)"].ReadOnly = true; // Calculated automatically
             dataGridViewTrades.Columns["Float"].ReadOnly = true; // Float is read-only (from CSV data)
             dataGridViewTrades.Columns["Chart"].ReadOnly = true;
             
@@ -1264,6 +1266,13 @@ namespace TradingJournalGPT.Forms
                     // Update the temporary state with the edited data
                     UpdateTradeInStorage(e.RowIndex);
                     
+                    // If gap-related values were changed, recalculate gap percentages
+                    if (columnName == "Previous Close" || columnName == "High After Volume Surge" || columnName == "Low After Volume Surge")
+                    {
+                        // The recalculation is already done in UpdateTradeInStorage, but we can add logging
+                        Console.WriteLine($"Gap percentages recalculated for row {e.RowIndex} after {columnName} change");
+                    }
+                    
                     // If Strategy column was edited, update Examples in setups
                     if (columnName == "Strategy")
                     {
@@ -1406,14 +1415,10 @@ namespace TradingJournalGPT.Forms
                     tradeToUpdate.HighAfterVolumeSurge = Convert.ToDecimal(dataGridViewTrades.Rows[rowIndex].Cells["High After Volume Surge"].Value ?? 0m);
                     tradeToUpdate.LowAfterVolumeSurge = Convert.ToDecimal(dataGridViewTrades.Rows[rowIndex].Cells["Low After Volume Surge"].Value ?? 0m);
                     
-                    // Ensure gap percentages are positive integers
-                    var gapToHigh = Convert.ToDecimal(dataGridViewTrades.Rows[rowIndex].Cells["Gap % (Close to High)"].Value ?? 0m);
-                    var gapHighToLow = Convert.ToDecimal(dataGridViewTrades.Rows[rowIndex].Cells["Gap % (High to Low)"].Value ?? 0m);
+                    // Calculate gap percentages dynamically based on current values
+                    RecalculateGapPercentages(tradeToUpdate);
                     
-                    tradeToUpdate.GapPercentToHigh = Math.Abs(Math.Round(gapToHigh, 0)); // Ensure positive integer
-                    tradeToUpdate.GapPercentHighToLow = Math.Abs(Math.Round(gapHighToLow, 0)); // Ensure positive integer
-                    
-                    // Update the display to show the corrected values
+                    // Update the display to show the calculated values
                     dataGridViewTrades.Rows[rowIndex].Cells["Gap % (Close to High)"].Value = tradeToUpdate.GapPercentToHigh;
                     dataGridViewTrades.Rows[rowIndex].Cells["Gap % (High to Low)"].Value = tradeToUpdate.GapPercentHighToLow;
                     
@@ -2014,7 +2019,7 @@ namespace TradingJournalGPT.Forms
             if (trade.PreviousDayClose > 0 && trade.HighAfterVolumeSurge > 0)
             {
                 var gapPercentToHigh = ((trade.HighAfterVolumeSurge - trade.PreviousDayClose) / trade.PreviousDayClose) * 100;
-                trade.GapPercentToHigh = Math.Round(gapPercentToHigh, 1);
+                trade.GapPercentToHigh = Math.Round(gapPercentToHigh, 2); // 2 decimal places
             }
             else
             {
@@ -2025,7 +2030,7 @@ namespace TradingJournalGPT.Forms
             if (trade.HighAfterVolumeSurge > 0 && trade.LowAfterVolumeSurge > 0)
             {
                 var gapPercentHighToLow = ((trade.LowAfterVolumeSurge - trade.HighAfterVolumeSurge) / trade.HighAfterVolumeSurge) * 100;
-                trade.GapPercentHighToLow = Math.Round(Math.Abs(gapPercentHighToLow), 1);
+                trade.GapPercentHighToLow = Math.Round(Math.Abs(gapPercentHighToLow), 2); // 2 decimal places
             }
             else
             {
