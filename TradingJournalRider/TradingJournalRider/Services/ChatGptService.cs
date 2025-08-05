@@ -24,8 +24,8 @@ namespace TradingJournalGPT.Services
                 var imageBytes = await File.ReadAllBytesAsync(imagePath);
                 var imageBase64 = Convert.ToBase64String(imageBytes);
 
-                // First prompt: Extract chart data
-                var firstPrompt = @"Look at this chart and extract ONLY the stock name, date, post volume surge high, and new low after that volume surge high.
+                // Single prompt: Extract chart data only
+                var prompt = @"Look at this chart and extract ONLY the stock name, date, post volume surge high, and new low after that volume surge high.
 
                 Return ONLY this JSON format with actual numbers (not null):
                 {
@@ -37,18 +37,24 @@ namespace TradingJournalGPT.Services
 
                 IMPORTANT: Use the high and low AFTER the volume surge, not the day's HOD/LOD. All numeric values must be actual numbers, not null.";
 
-                // First API call
-                var firstResponse = await CallChatGptApi(firstPrompt, imageBase64);
-                var chartData = ParseChartDataFromResponse(firstResponse);
+                // Single API call
+                var response = await CallChatGptApi(prompt, imageBase64);
+                var chartData = ParseChartDataFromResponse(response);
 
-                // Second prompt: Get online data
-                var secondPrompt = $@"Using online sources, get the volume traded and previous day close for {chartData.Symbol} on {chartData.Date:yyyy-MM-dd}.
+                // Create TradeData with default values for missing data
+                return CreateTradeDataFromChartData(chartData);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error analyzing chart image: {ex.Message}");
+            }
+        }
 
-                Chart data from first analysis:
-                - Symbol: {chartData.Symbol}
-                - Date: {chartData.Date:yyyy-MM-dd}
-                - Post volume surge high: {chartData.HighAfterVolumeSurge}
-                - Post volume surge low: {chartData.LowAfterVolumeSurge}
+        public async Task<OnlineData> GetOnlineDataForTrade(string symbol, DateTime date)
+        {
+            try
+            {
+                var prompt = $@"Using online sources, get the total volume traded and previous day close for {symbol} on {date:yyyy-MM-dd}.
 
                 Return ONLY this JSON format with actual numbers (not null):
                 {{
@@ -56,21 +62,53 @@ namespace TradingJournalGPT.Services
                     ""volume"": 0.00
                 }}
 
-                Get:
-                - previousDayClose: previous day's closing price
-                - volume: total volume traded that day (in millions of shares)";
+                IMPORTANT: 
+                - Get the volume traded specifically on {date:yyyy-MM-dd} (the date shown), not any other date. Make sure to get the actual volume for that exact trading day.
+                - Return volume in MILLIONS (e.g., if volume is 100,000,000 shares, return 100.00).
+                - Get the previous day's closing price for {symbol}.";
 
-                // Second API call
-                var secondResponse = await CallChatGptApi(secondPrompt, imageBase64);
-                var onlineData = ParseOnlineDataFromResponse(secondResponse);
-
-                // Combine the data
-                return CombineTradeData(chartData, onlineData);
+                // Call ChatGPT API without image (text-only)
+                var response = await CallChatGptApiTextOnly(prompt);
+                return ParseOnlineDataFromResponse(response);
             }
             catch (Exception ex)
             {
-                throw new Exception($"Error analyzing chart image: {ex.Message}");
+                throw new Exception($"Error getting online data for {symbol} on {date:yyyy-MM-dd}: {ex.Message}");
             }
+        }
+
+        private async Task<string> CallChatGptApiTextOnly(string prompt)
+        {
+            var requestPayload = new
+            {
+                model = "gpt-4o",
+                messages = new object[]
+                {
+                    new
+                    {
+                        role = "user",
+                        content = prompt
+                    }
+                },
+                max_tokens = 1000
+            };
+
+            var jsonRequest = JsonSerializer.Serialize(requestPayload);
+            var content = new StringContent(jsonRequest, Encoding.UTF8, "application/json");
+
+            var response = await _httpClient.PostAsync("https://api.openai.com/v1/chat/completions", content);
+            var responseText = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new Exception($"OpenAI API error: {response.StatusCode} - {responseText}");
+            }
+
+            using var responseDoc = JsonDocument.Parse(responseText);
+            var choices = responseDoc.RootElement.GetProperty("choices");
+            var firstChoice = choices[0];
+            var message = firstChoice.GetProperty("message");
+            return message.GetProperty("content").GetString() ?? "";
         }
 
         private async Task<string> CallChatGptApi(string prompt, string imageBase64)
@@ -152,6 +190,8 @@ namespace TradingJournalGPT.Services
             }
         }
 
+
+
         private OnlineData ParseOnlineDataFromResponse(string responseText)
         {
             try
@@ -180,27 +220,18 @@ namespace TradingJournalGPT.Services
             }
         }
 
-        private TradeData CombineTradeData(ChartData chartData, OnlineData onlineData)
+        private TradeData CreateTradeDataFromChartData(ChartData chartData)
         {
-            // Calculate gap percentages locally
-            var gapPercentToHigh = onlineData.PreviousDayClose > 0 
-                ? ((chartData.HighAfterVolumeSurge - onlineData.PreviousDayClose) / onlineData.PreviousDayClose) * 100 
-                : 0m;
-            
-            var gapPercentHighToLow = chartData.HighAfterVolumeSurge > 0 
-                ? ((chartData.LowAfterVolumeSurge - chartData.HighAfterVolumeSurge) / chartData.HighAfterVolumeSurge) * 100 
-                : 0m;
-
             var tradeData = new TradeData
             {
                 Symbol = chartData.Symbol,
                 Date = chartData.Date,
                 HighAfterVolumeSurge = chartData.HighAfterVolumeSurge,
                 LowAfterVolumeSurge = chartData.LowAfterVolumeSurge,
-                PreviousDayClose = onlineData.PreviousDayClose,
-                GapPercentToHigh = gapPercentToHigh,
-                GapPercentHighToLow = Math.Abs(gapPercentHighToLow),
-                Volume = (long)(onlineData.Volume * 1000000), // Convert millions to actual volume
+                PreviousDayClose = 0m, // Default value since we're not getting this data
+                GapPercentToHigh = 0m, // Default value since we don't have previous day close
+                GapPercentHighToLow = 0m, // Default value since we don't have previous day close
+                Volume = 0, // Default value since we're not getting volume data
                 Analysis = ""
             };
 
@@ -224,11 +255,13 @@ namespace TradingJournalGPT.Services
             public decimal LowAfterVolumeSurge { get; set; }
         }
 
-        private class OnlineData
+        public class OnlineData
         {
             public decimal PreviousDayClose { get; set; }
             public decimal Volume { get; set; }
         }
+
+
 
 
 

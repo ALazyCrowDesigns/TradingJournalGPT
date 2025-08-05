@@ -27,17 +27,21 @@ namespace TradingJournalGPT.Services
 
             try
             {
+                Console.WriteLine($"FloatDataService: Looking for float data in directory: {_floatDataDirectory}");
+                
                 if (!Directory.Exists(_floatDataDirectory))
                 {
-                    Console.WriteLine($"Float data directory not found: {_floatDataDirectory}");
+                    Console.WriteLine($"FloatDataService: Directory not found: {_floatDataDirectory}");
                     return;
                 }
 
                 // Find the most recent float data file by modification date
                 var floatFiles = Directory.GetFiles(_floatDataDirectory, "float_*.csv");
+                Console.WriteLine($"FloatDataService: Found {floatFiles.Length} float files");
+                
                 if (!floatFiles.Any())
                 {
-                    Console.WriteLine("No float data files found");
+                    Console.WriteLine("FloatDataService: No float data files found");
                     return;
                 }
 
@@ -47,14 +51,16 @@ namespace TradingJournalGPT.Services
                     .First();
                 
                 var lastWriteTime = File.GetLastWriteTime(latestFile);
-                Console.WriteLine($"Loading float data from: {latestFile} (Last modified: {lastWriteTime:yyyy-MM-dd HH:mm:ss})");
+                Console.WriteLine($"FloatDataService: Loading float data from: {latestFile} (Last modified: {lastWriteTime:yyyy-MM-dd HH:mm:ss})");
 
                 await LoadFloatDataAsync(latestFile);
                 _isInitialized = true;
+                Console.WriteLine($"FloatDataService: Successfully initialized with {_floatCache.Count} symbols");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error initializing float data service: {ex.Message}");
+                Console.WriteLine($"FloatDataService: Error initializing float data service: {ex.Message}");
+                Console.WriteLine($"FloatDataService: Stack trace: {ex.StackTrace}");
             }
         }
 
@@ -67,28 +73,60 @@ namespace TradingJournalGPT.Services
             {
                 _floatCache.Clear();
                 var lines = await File.ReadAllLinesAsync(filePath);
+                Console.WriteLine($"FloatDataService: Reading {lines.Length} lines from CSV file");
                 
                 // Skip header line
+                int loadedCount = 0;
+                int errorCount = 0;
+                
                 for (int i = 1; i < lines.Length; i++)
                 {
                     var line = lines[i];
                     var parts = line.Split(',');
                     
-                    if (parts.Length >= 14) // Ensure we have enough columns
+                    if (parts.Length >= 15) // Ensure we have enough columns (symbol at 12, latestFloat at 14)
                     {
                         var symbol = parts[12].Trim().ToUpper(); // symbol column
                         if (decimal.TryParse(parts[14].Trim(), out decimal floatValue)) // latestFloat column
                         {
                             _floatCache[symbol] = floatValue;
+                            loadedCount++;
+                            
+                            // Log every 1000 symbols for progress tracking
+                            if (loadedCount % 1000 == 0)
+                            {
+                                Console.WriteLine($"FloatDataService: Loaded {loadedCount} symbols so far...");
+                            }
+                        }
+                        else
+                        {
+                            errorCount++;
+                            if (errorCount <= 10) // Only log first 10 errors to avoid spam
+                            {
+                                Console.WriteLine($"FloatDataService: Failed to parse float value for symbol {symbol}: '{parts[14]}'");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        errorCount++;
+                        if (errorCount <= 10) // Only log first 10 errors to avoid spam
+                        {
+                            Console.WriteLine($"FloatDataService: Line {i} has insufficient columns: {parts.Length} (expected >= 15)");
                         }
                     }
                 }
 
-                Console.WriteLine($"Loaded float data for {_floatCache.Count} symbols");
+                Console.WriteLine($"FloatDataService: Successfully loaded float data for {loadedCount} symbols");
+                if (errorCount > 0)
+                {
+                    Console.WriteLine($"FloatDataService: Encountered {errorCount} parsing errors");
+                }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error loading float data: {ex.Message}");
+                Console.WriteLine($"FloatDataService: Error loading float data: {ex.Message}");
+                Console.WriteLine($"FloatDataService: Stack trace: {ex.StackTrace}");
             }
         }
 
@@ -103,7 +141,54 @@ namespace TradingJournalGPT.Services
                 return 0;
 
             var upperSymbol = symbol.Trim().ToUpper();
-            return _floatCache.TryGetValue(upperSymbol, out decimal floatValue) ? floatValue : 0;
+            var found = _floatCache.TryGetValue(upperSymbol, out decimal floatValue);
+            
+            if (found)
+            {
+                Console.WriteLine($"FloatDataService: Found float for {upperSymbol}: {floatValue}");
+            }
+            else
+            {
+                Console.WriteLine($"FloatDataService: No float data found for symbol: {upperSymbol}");
+            }
+            
+            return found ? floatValue : 0;
+        }
+
+        /// <summary>
+        /// Tests float access for a specific symbol and provides detailed information
+        /// </summary>
+        /// <param name="symbol">The stock symbol to test</param>
+        /// <returns>Detailed information about the float lookup</returns>
+        public string TestFloatAccess(string symbol)
+        {
+            if (string.IsNullOrEmpty(symbol))
+                return "Error: Symbol is null or empty";
+
+            var upperSymbol = symbol.Trim().ToUpper();
+            var found = _floatCache.TryGetValue(upperSymbol, out decimal floatValue);
+            
+            var result = $"FloatDataService Test for '{symbol}':\n";
+            result += $"  - Normalized symbol: '{upperSymbol}'\n";
+            result += $"  - Found in cache: {found}\n";
+            result += $"  - Float value: {floatValue}\n";
+            result += $"  - Total symbols in cache: {_floatCache.Count}\n";
+            
+            if (!found)
+            {
+                // Show some similar symbols for debugging
+                var similarSymbols = _floatCache.Keys
+                    .Where(k => k.Contains(upperSymbol) || upperSymbol.Contains(k))
+                    .Take(5)
+                    .ToList();
+                
+                if (similarSymbols.Any())
+                {
+                    result += $"  - Similar symbols found: {string.Join(", ", similarSymbols)}\n";
+                }
+            }
+            
+            return result;
         }
 
         /// <summary>

@@ -578,6 +578,10 @@ namespace TradingJournalGPT.Forms
                 
                 // Refresh the Strategy ComboBox items after loading trades
                 // RefreshStrategyComboBoxItems(); // This method is being removed
+                
+                // Update Examples columns in setups and technicals tabs
+                UpdateSetupsExamplesFromTrades();
+                UpdateTechnicalsExamplesFromTrades();
             }
             catch (Exception ex)
             {
@@ -603,6 +607,7 @@ namespace TradingJournalGPT.Forms
             _isProcessing = true;
             btnAnalyzeChartImage.Enabled = false;
             btnAnalyzeChartFolder.Enabled = false;
+            btnGetOnlineData.Enabled = false;
             
             try
             {
@@ -629,6 +634,7 @@ namespace TradingJournalGPT.Forms
                 _isProcessing = false;
                 btnAnalyzeChartImage.Enabled = true;
                 btnAnalyzeChartFolder.Enabled = true;
+                btnGetOnlineData.Enabled = true;
             }
         }
 
@@ -645,6 +651,121 @@ namespace TradingJournalGPT.Forms
                 {
                     await ProcessFolder(folderBrowserDialog.SelectedPath);
                 }
+            }
+        }
+
+        private async void btnGetOnlineData_Click(object? sender, EventArgs e)
+        {
+            if (_isProcessing)
+            {
+                MessageBox.Show("Already processing. Please wait for the current operation to complete.", "Processing", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (dataGridViewTrades.SelectedRows.Count == 0)
+            {
+                MessageBox.Show("Please select one or more trades to get online data for.", "No Selection", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            try
+            {
+                _isProcessing = true;
+                btnAnalyzeChartImage.Enabled = false;
+                btnAnalyzeChartFolder.Enabled = false;
+                btnGetOnlineData.Enabled = false;
+                btnRefresh.Enabled = false;
+
+                var selectedTrades = new List<(int rowIndex, TradeData trade)>();
+                
+                // Get selected trades
+                foreach (DataGridViewRow row in dataGridViewTrades.SelectedRows)
+                {
+                    var symbol = row.Cells["Symbol"].Value?.ToString();
+                    var dateValue = row.Cells["Date"].Value;
+                    
+                    if (string.IsNullOrEmpty(symbol) || dateValue == null)
+                        continue;
+
+                    if (DateTime.TryParse(dateValue.ToString(), out var date))
+                    {
+                        var trade = _temporaryTrades.FirstOrDefault(t => 
+                            t.Symbol == symbol && 
+                            t.Date.Date == date.Date);
+                        
+                        if (trade != null)
+                        {
+                            selectedTrades.Add((row.Index, trade));
+                        }
+                    }
+                }
+
+                if (selectedTrades.Count == 0)
+                {
+                    MessageBox.Show("No valid trades selected for online data retrieval.", "No Valid Trades", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                // Process each selected trade
+                for (int i = 0; i < selectedTrades.Count; i++)
+                {
+                    var (rowIndex, trade) = selectedTrades[i];
+                    
+                    try
+                    {
+                        lblStatus.Text = $"Getting online data for {trade.Symbol} ({i + 1}/{selectedTrades.Count})...";
+                        Application.DoEvents();
+
+                        var onlineData = await _tradingJournalService.GetOnlineDataForTrade(trade.Symbol, trade.Date);
+                        
+                        // Update the trade with online data
+                        trade.PreviousDayClose = onlineData.PreviousDayClose;
+                        trade.Volume = (long)(onlineData.Volume * 1000000); // Convert millions to actual volume
+                        
+                        // Calculate gap percentages
+                        if (onlineData.PreviousDayClose > 0)
+                        {
+                            var gapPercentToHigh = ((trade.HighAfterVolumeSurge - onlineData.PreviousDayClose) / onlineData.PreviousDayClose) * 100;
+                            trade.GapPercentToHigh = Math.Round(gapPercentToHigh, 1);
+                        }
+                        
+                        if (trade.HighAfterVolumeSurge > 0)
+                        {
+                            var gapPercentHighToLow = ((trade.LowAfterVolumeSurge - trade.HighAfterVolumeSurge) / trade.HighAfterVolumeSurge) * 100;
+                            trade.GapPercentHighToLow = Math.Round(Math.Abs(gapPercentHighToLow), 1);
+                        }
+
+                        // Update the display
+                        dataGridViewTrades.Rows[rowIndex].Cells["Previous Close"].Value = trade.PreviousDayClose;
+                        dataGridViewTrades.Rows[rowIndex].Cells["Volume (M)"].Value = onlineData.Volume;
+                        dataGridViewTrades.Rows[rowIndex].Cells["Gap % (Close to High)"].Value = trade.GapPercentToHigh;
+                        dataGridViewTrades.Rows[rowIndex].Cells["Gap % (High to Low)"].Value = trade.GapPercentHighToLow;
+
+                        // Mark as having unsaved changes
+                        SetUnsavedChanges(true);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error getting online data for {trade.Symbol}: {ex.Message}");
+                        // Continue with next trade instead of stopping
+                    }
+                }
+
+                lblStatus.Text = "Online data retrieval completed.";
+                MessageBox.Show($"Successfully updated online data for {selectedTrades.Count} trade(s).", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error getting online data: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                _isProcessing = false;
+                btnAnalyzeChartImage.Enabled = true;
+                btnAnalyzeChartFolder.Enabled = true;
+                btnGetOnlineData.Enabled = true;
+                btnRefresh.Enabled = true;
+                lblStatus.Text = "Ready";
             }
         }
 
@@ -737,6 +858,7 @@ namespace TradingJournalGPT.Forms
             _isProcessing = true;
             btnAnalyzeChartImage.Enabled = false;
             btnAnalyzeChartFolder.Enabled = false;
+            btnGetOnlineData.Enabled = false;
             progressBar.Visible = true;
 
             try
@@ -823,6 +945,7 @@ namespace TradingJournalGPT.Forms
                 _isProcessing = false;
                 btnAnalyzeChartImage.Enabled = true;
                 btnAnalyzeChartFolder.Enabled = true;
+                btnGetOnlineData.Enabled = true;
                 progressBar.Visible = false;
                 lblStatus.Text = "Ready";
             }
@@ -888,6 +1011,10 @@ namespace TradingJournalGPT.Forms
             else if (columnName == "Strategy")
             {
                 ShowStrategySelectionDialog(e.RowIndex);
+            }
+            else if (columnName == "Technicals")
+            {
+                ShowTechnicalSelectionDialog(e.RowIndex);
             }
         }
 
@@ -971,6 +1098,90 @@ namespace TradingJournalGPT.Forms
             catch (Exception ex)
             {
                 MessageBox.Show($"Error showing strategy selection dialog: {ex.Message}", 
+                    "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void ShowTechnicalSelectionDialog(int rowIndex)
+        {
+            try
+            {
+                // Get available technical types from technicals
+                var availableTechnicals = _temporaryTechnicals
+                    .Select(t => t["Type"]?.ToString() ?? "")
+                    .Where(t => !string.IsNullOrEmpty(t))
+                    .ToList();
+
+                if (!availableTechnicals.Any())
+                {
+                    MessageBox.Show("No technical types available. Please add some technical types in the Technicals tab first.", 
+                        "No Technicals", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                // Create a simple form with ComboBox
+                using var form = new Form
+                {
+                    Text = "Select Technical Type",
+                    Size = new Size(300, 150),
+                    StartPosition = FormStartPosition.CenterParent,
+                    FormBorderStyle = FormBorderStyle.FixedDialog,
+                    MaximizeBox = false,
+                    MinimizeBox = false
+                };
+
+                var comboBox = new ComboBox
+                {
+                    Location = new Point(20, 20),
+                    Size = new Size(240, 25),
+                    DropDownStyle = ComboBoxStyle.DropDownList
+                };
+
+                // Add empty option and available technical types
+                comboBox.Items.Add("");
+                comboBox.Items.AddRange(availableTechnicals.ToArray());
+
+                // Set current value if any
+                var currentValue = dataGridViewTrades.Rows[rowIndex].Cells["Technicals"].Value?.ToString() ?? "";
+                if (!string.IsNullOrEmpty(currentValue))
+                {
+                    comboBox.SelectedItem = currentValue;
+                }
+                else
+                {
+                    comboBox.SelectedIndex = 0; // Select empty option
+                }
+
+                var button = new Button
+                {
+                    Text = "OK",
+                    Location = new Point(100, 60),
+                    Size = new Size(80, 30),
+                    DialogResult = DialogResult.OK
+                };
+
+                form.Controls.Add(comboBox);
+                form.Controls.Add(button);
+                form.AcceptButton = button;
+
+                // Show dialog
+                if (form.ShowDialog() == DialogResult.OK)
+                {
+                    var selectedTechnical = comboBox.SelectedItem?.ToString() ?? "";
+                    dataGridViewTrades.Rows[rowIndex].Cells["Technicals"].Value = selectedTechnical;
+                    
+                    // Update the trade in temporary storage
+                    UpdateTradeInStorage(rowIndex);
+                    
+                    // Update Examples column in technicals to reflect the technical change
+                    UpdateTechnicalsExamplesFromTrades();
+                    
+                    SetUnsavedChanges(true);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error showing technical selection dialog: {ex.Message}", 
                     "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -1197,6 +1408,11 @@ namespace TradingJournalGPT.Forms
                     tradeToUpdate.Setup = strategyValue;
                     Console.WriteLine($"Updated Strategy for trade {tradeToUpdate.Symbol} on {tradeToUpdate.Date:yyyy-MM-dd}: '{strategyValue}'");
                     
+                    // Update Technicals field
+                    var technicalsValue = dataGridViewTrades.Rows[rowIndex].Cells["Technicals"].Value?.ToString() ?? "";
+                    tradeToUpdate.Technicals = technicalsValue;
+                    Console.WriteLine($"Updated Technicals for trade {tradeToUpdate.Symbol} on {tradeToUpdate.Date:yyyy-MM-dd}: '{technicalsValue}'");
+                    
                     // Update Trade Seq if it was changed (though it should be read-only)
                     var currentTradeSeq = Convert.ToInt32(dataGridViewTrades.Rows[rowIndex].Cells["Trade Seq"].Value ?? 0);
                     tradeToUpdate.TradeSeq = currentTradeSeq;
@@ -1222,6 +1438,10 @@ namespace TradingJournalGPT.Forms
 
                     var undoAction = new EditTradeAction(originalTrade, modifiedTrade, _temporaryTrades);
                     AddUndoAction(undoAction);
+
+                    // Update Examples columns in setups and technicals tabs
+                    UpdateSetupsExamplesFromTrades();
+                    UpdateTechnicalsExamplesFromTrades();
 
                     // Mark as having unsaved changes
                     SetUnsavedChanges(true);
@@ -1564,6 +1784,100 @@ namespace TradingJournalGPT.Forms
             }
         }
 
+        private void UpdateTradesForTechnicalChange(string oldTechnicalName, string newTechnicalName)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(oldTechnicalName) || string.IsNullOrEmpty(newTechnicalName))
+                    return;
+
+                Console.WriteLine($"Updating trades: '{oldTechnicalName}' -> '{newTechnicalName}'");
+                
+                // Update trades in temporary state
+                var updatedTrades = 0;
+                foreach (var trade in _temporaryTrades)
+                {
+                    if (trade.Technicals == oldTechnicalName)
+                    {
+                        trade.Technicals = newTechnicalName;
+                        updatedTrades++;
+                        Console.WriteLine($"Updated trade {trade.Symbol} {trade.Date:yyyy-MM-dd} technical from '{oldTechnicalName}' to '{newTechnicalName}'");
+                    }
+                }
+                
+                // Update trades in deleted trades list as well
+                foreach (var trade in _deletedTrades)
+                {
+                    if (trade.Technicals == oldTechnicalName)
+                    {
+                        trade.Technicals = newTechnicalName;
+                        Console.WriteLine($"Updated deleted trade {trade.Symbol} {trade.Date:yyyy-MM-dd} technical from '{oldTechnicalName}' to '{newTechnicalName}'");
+                    }
+                }
+                
+                // Update Examples column in technicals to reflect the technical name change
+                UpdateTechnicalsExamplesFromTrades();
+                
+                // Refresh the trades display to show the updated technical names
+                if (updatedTrades > 0)
+                {
+                    LoadRecentTrades();
+                    Console.WriteLine($"Updated {updatedTrades} trades for technical name change");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error updating trades for technical change: {ex.Message}");
+            }
+        }
+
+        private void ClearTradesForDeletedTechnical(string deletedTechnicalName)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(deletedTechnicalName))
+                    return;
+
+                Console.WriteLine($"Clearing trades for deleted technical: '{deletedTechnicalName}'");
+                
+                // Clear technical references in temporary state
+                var clearedTrades = 0;
+                foreach (var trade in _temporaryTrades)
+                {
+                    if (trade.Technicals == deletedTechnicalName)
+                    {
+                        trade.Technicals = "";
+                        clearedTrades++;
+                        Console.WriteLine($"Cleared technical for trade {trade.Symbol} {trade.Date:yyyy-MM-dd} (was '{deletedTechnicalName}')");
+                    }
+                }
+                
+                // Clear technical references in deleted trades list as well
+                foreach (var trade in _deletedTrades)
+                {
+                    if (trade.Technicals == deletedTechnicalName)
+                    {
+                        trade.Technicals = "";
+                        Console.WriteLine($"Cleared technical for deleted trade {trade.Symbol} {trade.Date:yyyy-MM-dd} (was '{deletedTechnicalName}')");
+                    }
+                }
+                
+                // Update Examples column in technicals to reflect the deleted technical
+                UpdateTechnicalsExamplesFromTrades();
+                
+                // Refresh the trades display to show the cleared technical names
+                if (clearedTrades > 0)
+                {
+                    LoadRecentTrades();
+                    Console.WriteLine($"Cleared technical for {clearedTrades} trades");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error clearing trades for deleted technical: {ex.Message}");
+            }
+        }
+
         private Image CreateThumbnail(string imagePath, int width, int height)
         {
             try
@@ -1805,6 +2119,54 @@ namespace TradingJournalGPT.Forms
             catch (Exception ex)
             {
                 Console.WriteLine($"Error updating setups examples: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Updates the Examples column in the technicals tab based on trades that use each technical type
+        /// </summary>
+        private void UpdateTechnicalsExamplesFromTrades()
+        {
+            try
+            {
+                // Get all trades (including temporary and excluding deleted)
+                var allTrades = _temporaryTrades.ToList();
+                
+                // Group trades by technical type
+                var technicalGroups = allTrades
+                    .Where(trade => !string.IsNullOrEmpty(trade.Technicals))
+                    .GroupBy(trade => trade.Technicals)
+                    .ToDictionary(g => g.Key, g => g.Select(t => t.Symbol).Distinct().ToList());
+
+                // Update each technical's Examples column
+                foreach (var technical in _temporaryTechnicals)
+                {
+                    if (technical.ContainsKey("Type") && technical["Type"] != null)
+                    {
+                        string technicalType = technical["Type"].ToString() ?? "";
+                        
+                        if (technicalGroups.ContainsKey(technicalType))
+                        {
+                            // Join symbols with commas
+                            string examples = string.Join(", ", technicalGroups[technicalType]);
+                            technical["Examples"] = examples;
+                        }
+                        else
+                        {
+                            // No trades for this technical type, clear examples
+                            technical["Examples"] = "";
+                        }
+                    }
+                }
+
+                // Refresh the technicals display to show updated examples
+                RefreshTechnicalsDisplay();
+                
+                Console.WriteLine($"Updated Examples column for {technicalGroups.Count} technical types");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error updating technicals examples: {ex.Message}");
             }
         }
 
@@ -2354,9 +2716,18 @@ namespace TradingJournalGPT.Forms
                         technicalToDelete[col.ColumnName] = selectedRow.Cells[i].Value ?? "";
                     }
                     
+                    // Get the technical type name for clearing trades
+                    var technicalTypeName = technicalToDelete.ContainsKey("Type") ? technicalToDelete["Type"]?.ToString() ?? "" : "";
+                    
                     // Remove from temporary state
                     _temporaryTechnicals.RemoveAt(rowIndex);
                     _deletedTechnicals.Add(technicalToDelete);
+                    
+                    // Clear trades that reference this technical type
+                    if (!string.IsNullOrEmpty(technicalTypeName))
+                    {
+                        ClearTradesForDeletedTechnical(technicalTypeName);
+                    }
                     
                     // Add undo action
                     var deleteAction = new DeleteTechnicalAction(technicalToDelete, _temporaryTechnicals, _deletedTechnicals);
@@ -2386,10 +2757,18 @@ namespace TradingJournalGPT.Forms
                     var technical = _temporaryTechnicals[e.RowIndex];
                     var columnName = dataGridViewTechnicals.Columns[e.ColumnIndex].Name;
                     var newValue = dataGridViewTechnicals.Rows[e.RowIndex].Cells[e.ColumnIndex].Value?.ToString() ?? "";
+                    var oldValue = technical.ContainsKey(columnName) ? technical[columnName]?.ToString() ?? "" : "";
                     
                     if (technical.ContainsKey(columnName) && technical[columnName]?.ToString() != newValue)
                     {
                         technical[columnName] = newValue;
+                        
+                        // If Type column was changed, update trades that reference this technical type
+                        if (columnName == "Type" && oldValue != newValue)
+                        {
+                            UpdateTradesForTechnicalChange(oldValue, newValue);
+                        }
+                        
                         SetUnsavedChanges(true);
                         Console.WriteLine($"Updated technical {columnName} to: {newValue}");
                     }

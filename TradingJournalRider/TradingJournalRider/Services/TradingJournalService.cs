@@ -9,6 +9,7 @@ namespace TradingJournalGPT.Services
         private readonly GoogleSheetsService _googleSheetsService;
         private readonly LocalStorageService _localStorageService;
         private readonly ImageStorageService _imageStorageService;
+        private readonly FloatDataService _floatDataService;
 
         public TradingJournalService()
         {
@@ -16,13 +17,14 @@ namespace TradingJournalGPT.Services
             var config = ConfigurationManager.GetConfiguration();
             
             _chatGptService = new ChatGptService(config.OpenAiApiKey);
-                        _googleSheetsService = new GoogleSheetsService(
+            _googleSheetsService = new GoogleSheetsService(
                 config.GoogleCredentialsPath,
                 config.GoogleSpreadsheetId,
                 config.GoogleSheetName
             );
             _localStorageService = new LocalStorageService();
             _imageStorageService = new ImageStorageService();
+            _floatDataService = new FloatDataService();
         }
 
         public async Task<TradeData> AnalyzeChartImage(string imagePath)
@@ -30,10 +32,20 @@ namespace TradingJournalGPT.Services
             Console.WriteLine($"TradingJournalService.AnalyzeChartImage called for: {imagePath}");
             try
             {
+                // Initialize float data service
+                Console.WriteLine("Initializing float data service...");
+                await _floatDataService.InitializeAsync();
+                
                 // Use ChatGPT to analyze the chart image
                 Console.WriteLine("Calling ChatGPT service...");
                 var tradeData = await _chatGptService.AnalyzeChartImage(imagePath);
                 Console.WriteLine($"ChatGPT returned: Symbol={tradeData.Symbol}, Date={tradeData.Date}");
+                
+                // Get float data for the symbol
+                Console.WriteLine($"Getting float data for symbol: {tradeData.Symbol}");
+                var floatValue = _floatDataService.GetFloat(tradeData.Symbol);
+                tradeData.Float = floatValue;
+                Console.WriteLine($"Float value for {tradeData.Symbol}: {floatValue}");
                 
                 // Get the next trade sequence number for this symbol and date
                 Console.WriteLine("Getting next trade sequence...");
@@ -53,6 +65,22 @@ namespace TradingJournalGPT.Services
             {
                 Console.WriteLine($"Error in TradingJournalService.AnalyzeChartImage: {ex.Message}");
                 throw new Exception($"Error analyzing chart image: {ex.Message}");
+            }
+        }
+
+        public async Task<ChatGptService.OnlineData> GetOnlineDataForTrade(string symbol, DateTime date)
+        {
+            try
+            {
+                Console.WriteLine($"Getting online data for {symbol} on {date:yyyy-MM-dd}");
+                var onlineData = await _chatGptService.GetOnlineDataForTrade(symbol, date);
+                Console.WriteLine($"Online data retrieved: PreviousClose={onlineData.PreviousDayClose}, Volume={onlineData.Volume}");
+                return onlineData;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error getting online data for {symbol}: {ex.Message}");
+                throw new Exception($"Error getting online data for {symbol}: {ex.Message}");
             }
         }
 
