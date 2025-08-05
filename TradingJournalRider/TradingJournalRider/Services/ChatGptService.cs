@@ -54,18 +54,24 @@ namespace TradingJournalGPT.Services
         {
             try
             {
-                var prompt = $@"Using online sources, get the total volume traded and previous day close for {symbol} on {date:yyyy-MM-dd}.
+                var prompt = $@"You are a financial data expert. Get the exact previous day closing price and trading volume for {symbol} on {date:yyyy-MM-dd}.
 
-                Return ONLY this JSON format with actual numbers (not null):
+                Use reliable financial sources like Yahoo Finance, MarketWatch, or similar to get:
+                1. The previous trading day's closing price for {symbol}
+                2. The total volume traded on {date:yyyy-MM-dd} for {symbol}
+
+                Return ONLY this JSON format with actual market data (not placeholder values):
                 {{
                     ""previousDayClose"": 0.00,
                     ""volume"": 0.00
                 }}
 
-                IMPORTANT: 
-                - Get the volume traded specifically on {date:yyyy-MM-dd} (the date shown), not any other date. Make sure to get the actual volume for that exact trading day.
-                - Return volume in MILLIONS (e.g., if volume is 100,000,000 shares, return 100.00).
-                - Get the previous day's closing price for {symbol}.";
+                CRITICAL REQUIREMENTS:
+                - previousDayClose: Must be the actual previous trading day's closing price (not 0.00)
+                - volume: Must be the actual volume traded on {date:yyyy-MM-dd} in MILLIONS (e.g., 100.00 for 100M shares)
+                - Use real market data, not estimates or placeholders
+                - If data is not available, return the closest available data with a note
+                - Format numbers as decimals (e.g., 15.75, 123.45)";
 
                 // Call ChatGPT API without image (text-only)
                 var response = await CallChatGptApiTextOnly(prompt);

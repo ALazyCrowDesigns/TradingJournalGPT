@@ -726,20 +726,14 @@ namespace TradingJournalGPT.Forms
                         trade.PreviousDayClose = onlineData.PreviousDayClose;
                         trade.Volume = (long)(onlineData.Volume * 1000000); // Convert millions to actual volume
                         
-                        // Calculate gap percentages
-                        if (onlineData.PreviousDayClose > 0)
-                        {
-                            var gapPercentToHigh = ((trade.HighAfterVolumeSurge - onlineData.PreviousDayClose) / onlineData.PreviousDayClose) * 100;
-                            trade.GapPercentToHigh = Math.Round(gapPercentToHigh, 1);
-                            Console.WriteLine($"  Gap % (Close to High): {trade.GapPercentToHigh}%");
-                        }
+                        // Calculate gap percentages dynamically
+                        Console.WriteLine($"  High After Volume Surge: {trade.HighAfterVolumeSurge}");
+                        Console.WriteLine($"  Low After Volume Surge: {trade.LowAfterVolumeSurge}");
                         
-                        if (trade.HighAfterVolumeSurge > 0)
-                        {
-                            var gapPercentHighToLow = ((trade.LowAfterVolumeSurge - trade.HighAfterVolumeSurge) / trade.HighAfterVolumeSurge) * 100;
-                            trade.GapPercentHighToLow = Math.Round(Math.Abs(gapPercentHighToLow), 1);
-                            Console.WriteLine($"  Gap % (High to Low): {trade.GapPercentHighToLow}%");
-                        }
+                        // Use the helper method to recalculate gap percentages
+                        RecalculateGapPercentages(trade);
+                        Console.WriteLine($"  Gap % (Close to High): {trade.GapPercentToHigh}%");
+                        Console.WriteLine($"  Gap % (High to Low): {trade.GapPercentHighToLow}%");
 
                         // Update the display immediately
                         dataGridViewTrades.Rows[rowIndex].Cells["Previous Close"].Value = trade.PreviousDayClose;
@@ -757,6 +751,14 @@ namespace TradingJournalGPT.Forms
 
                         // Mark as having unsaved changes
                         SetUnsavedChanges(true);
+                        
+                        // Ensure the trade is properly updated in the temporary state
+                        var existingTradeIndex = _temporaryTrades.IndexOf(trade);
+                        if (existingTradeIndex >= 0)
+                        {
+                            _temporaryTrades[existingTradeIndex] = trade;
+                            Console.WriteLine($"Updated trade in temporary state at index {existingTradeIndex}");
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -2003,6 +2005,31 @@ namespace TradingJournalGPT.Forms
             else
             {
                 Text = Text.Replace(" *", "");
+            }
+        }
+        
+        private void RecalculateGapPercentages(TradeData trade)
+        {
+            // Calculate Gap % (Close to High)
+            if (trade.PreviousDayClose > 0 && trade.HighAfterVolumeSurge > 0)
+            {
+                var gapPercentToHigh = ((trade.HighAfterVolumeSurge - trade.PreviousDayClose) / trade.PreviousDayClose) * 100;
+                trade.GapPercentToHigh = Math.Round(gapPercentToHigh, 1);
+            }
+            else
+            {
+                trade.GapPercentToHigh = 0m;
+            }
+            
+            // Calculate Gap % (High to Low)
+            if (trade.HighAfterVolumeSurge > 0 && trade.LowAfterVolumeSurge > 0)
+            {
+                var gapPercentHighToLow = ((trade.LowAfterVolumeSurge - trade.HighAfterVolumeSurge) / trade.HighAfterVolumeSurge) * 100;
+                trade.GapPercentHighToLow = Math.Round(Math.Abs(gapPercentHighToLow), 1);
+            }
+            else
+            {
+                trade.GapPercentHighToLow = 0m;
             }
         }
 
