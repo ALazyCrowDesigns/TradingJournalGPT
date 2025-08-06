@@ -263,7 +263,6 @@ namespace TradingJournalGPT.Services
             var totalEntryValue = 0m;
             var totalExitValue = 0m;
             var totalProfitLoss = 0m;
-            var totalProfitLossPercent = 0m;
             var totalPositionSize = 0;
             
             Console.WriteLine($"Merging {trades.Count} trades for {firstTrade.Symbol} {firstTrade.TradeType} on {firstTrade.Date:MM/dd/yyyy}");
@@ -286,7 +285,6 @@ namespace TradingJournalGPT.Services
                 
                 // Sum profit/loss (already weighted by shares in the original data)
                 totalProfitLoss += trade.ProfitLoss;
-                totalProfitLossPercent += trade.ProfitLossPercent;
                 
                 Console.WriteLine($"  Trade: {shares} shares @ {trade.EntryPrice:F2} -> {trade.ExitPrice:F2}, P/L: {trade.ProfitLoss:F2}");
             }
@@ -294,6 +292,13 @@ namespace TradingJournalGPT.Services
             // Calculate weighted average prices
             var weightedAvgEntryPrice = totalShares > 0 ? totalEntryValue / totalShares : 0;
             var weightedAvgExitPrice = totalShares > 0 ? totalExitValue / totalShares : 0;
+            
+            // Calculate correct weighted percentage
+            var weightedProfitLossPercent = 0m;
+            if (totalEntryValue > 0)
+            {
+                weightedProfitLossPercent = ((totalExitValue - totalEntryValue) / totalEntryValue) * 100;
+            }
             
             // Create merged trade
             var mergedTrade = new TradeData
@@ -305,7 +310,7 @@ namespace TradingJournalGPT.Services
                 EntryDate = firstTrade.EntryDate,
                 ExitDate = firstTrade.ExitDate,
                 ProfitLoss = totalProfitLoss,
-                ProfitLossPercent = totalProfitLossPercent,
+                ProfitLossPercent = weightedProfitLossPercent, // Fixed: Calculate weighted percentage
                 TradeType = firstTrade.TradeType,
                 PositionSize = totalPositionSize, // Total shares across all trades
                 Analysis = $"Merged {trades.Count} Tradersync trades ({totalPositionSize} total shares) - {firstTrade.Analysis}",
@@ -313,7 +318,7 @@ namespace TradingJournalGPT.Services
                 TradeSeq = 1
             };
             
-            Console.WriteLine($"Merged result: {totalPositionSize} total shares @ {weightedAvgEntryPrice:F2} -> {weightedAvgExitPrice:F2}, Total P/L: {totalProfitLoss:F2}");
+            Console.WriteLine($"Merged result: {totalPositionSize} total shares @ {weightedAvgEntryPrice:F2} -> {weightedAvgExitPrice:F2}, Total P/L: {totalProfitLoss:F2}, P/L %: {weightedProfitLossPercent:F2}%");
             
             return mergedTrade;
         }
