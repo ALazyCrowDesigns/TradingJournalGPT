@@ -50,6 +50,12 @@ namespace TradingJournalGPT.Services
                 }
                 
                 Console.WriteLine($"Total trades imported: {trades.Count}");
+                
+                // Merge trades with same symbol, side, and date
+                var mergedTrades = MergeTradesBySymbolSideAndDate(trades);
+                Console.WriteLine($"After merging: {mergedTrades.Count} trades");
+                
+                return mergedTrades;
             }
             catch (Exception ex)
             {
@@ -207,6 +213,92 @@ namespace TradingJournalGPT.Services
                 RecordedDate = DateTime.Now,
                 TradeSeq = 1 // Default sequence for imported trades
             };
+        }
+
+        private List<TradeData> MergeTradesBySymbolSideAndDate(List<TradeData> trades)
+        {
+            var mergedTrades = new List<TradeData>();
+            var tradeGroups = trades.GroupBy(t => new { t.Symbol, t.TradeType, t.Date.Date }).ToList();
+            
+            Console.WriteLine($"Found {tradeGroups.Count} unique symbol/side/date combinations");
+            
+            foreach (var group in tradeGroups)
+            {
+                if (group.Count() == 1)
+                {
+                    // Single trade, no merging needed
+                    mergedTrades.Add(group.First());
+                    Console.WriteLine($"Single trade: {group.Key.Symbol} {group.Key.TradeType} on {group.Key.Date:MM/dd/yyyy}");
+                }
+                else
+                {
+                    // Multiple trades to merge
+                    var mergedTrade = MergeTradeGroup(group.ToList());
+                    mergedTrades.Add(mergedTrade);
+                    Console.WriteLine($"Merged {group.Count()} trades: {group.Key.Symbol} {group.Key.TradeType} on {group.Key.Date:MM/dd/yyyy}");
+                }
+            }
+            
+            return mergedTrades;
+        }
+
+        private TradeData MergeTradeGroup(List<TradeData> trades)
+        {
+            if (trades.Count == 0) return null;
+            if (trades.Count == 1) return trades[0];
+            
+            var firstTrade = trades[0];
+            var totalEntryValue = 0m;
+            var totalExitValue = 0m;
+            var totalShares = 0m;
+            var totalProfitLoss = 0m;
+            var totalProfitLossPercent = 0m;
+            var entryPrices = new List<decimal>();
+            var exitPrices = new List<decimal>();
+            
+            foreach (var trade in trades)
+            {
+                // Calculate weighted averages for prices
+                if (trade.EntryPrice > 0)
+                {
+                    entryPrices.Add(trade.EntryPrice);
+                    totalEntryValue += trade.EntryPrice;
+                }
+                if (trade.ExitPrice > 0)
+                {
+                    exitPrices.Add(trade.ExitPrice);
+                    totalExitValue += trade.ExitPrice;
+                }
+                
+                totalProfitLoss += trade.ProfitLoss;
+                totalProfitLossPercent += trade.ProfitLossPercent;
+                totalShares += 1; // Assuming each trade represents 1 share/contract
+            }
+            
+            // Calculate weighted average prices
+            var avgEntryPrice = entryPrices.Count > 0 ? totalEntryValue / entryPrices.Count : 0;
+            var avgExitPrice = exitPrices.Count > 0 ? totalExitValue / exitPrices.Count : 0;
+            
+            // Create merged trade
+            var mergedTrade = new TradeData
+            {
+                Symbol = firstTrade.Symbol,
+                Date = firstTrade.Date,
+                EntryPrice = avgEntryPrice,
+                ExitPrice = avgExitPrice,
+                EntryDate = firstTrade.EntryDate,
+                ExitDate = firstTrade.ExitDate,
+                ProfitLoss = totalProfitLoss,
+                ProfitLossPercent = totalProfitLossPercent,
+                TradeType = firstTrade.TradeType,
+                Analysis = $"Merged {trades.Count} Tradersync trades - {firstTrade.Analysis}",
+                RecordedDate = DateTime.Now,
+                TradeSeq = 1
+            };
+            
+            Console.WriteLine($"Merged trade: {mergedTrade.Symbol} {mergedTrade.TradeType} - Avg Entry: {avgEntryPrice:F2}, Avg Exit: {avgExitPrice:F2}, Total P/L: {totalProfitLoss:F2}");
+            
+            return mergedTrade;
         }
     }
 } 
