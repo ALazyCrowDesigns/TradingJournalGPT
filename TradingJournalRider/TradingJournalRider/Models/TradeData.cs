@@ -4,6 +4,7 @@ namespace TradingJournalGPT.Models
     {
         public string Symbol { get; set; } = string.Empty;
         public DateTime Date { get; set; }
+        public string Status { get; set; } = string.Empty; // SHORT/LONG from Tradersync
         public decimal HighAfterVolumeSurge { get; set; }
         public decimal LowAfterVolumeSurge { get; set; }
         public decimal LowBeforeVolumeSurge { get; set; } // Low before the volume surge high
@@ -20,6 +21,7 @@ namespace TradingJournalGPT.Models
         public int PositionSize { get; set; }
         public string TradeType { get; set; } = string.Empty;
         public decimal ProfitLoss { get; set; }
+        public decimal ProfitLossPercent { get; set; } // Percentage return from Tradersync
         public long Volume { get; set; }
         public long TotalVolume { get; set; } // Total volume traded on this date
         public DateTime RecordedDate { get; set; } = DateTime.Now;
