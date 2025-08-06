@@ -19,6 +19,7 @@ namespace TradingJournalGPT.Forms
         private readonly TradingJournalService _tradingJournalService;
         private readonly LocalStorageService _localStorageService;
         private readonly FloatDataService _floatDataService;
+        private readonly TradersyncImportService _tradersyncImportService;
         private DataTable _tradesDataTable = new DataTable();
         private DataTable _setupsDataTable = new DataTable();
         private DataTable _technicalsDataTable = new DataTable();
@@ -47,6 +48,7 @@ namespace TradingJournalGPT.Forms
             _tradingJournalService = new TradingJournalService();
             _localStorageService = new LocalStorageService();
             _floatDataService = new FloatDataService();
+            _tradersyncImportService = new TradersyncImportService();
             
             // Load application icon
             try
@@ -89,6 +91,11 @@ namespace TradingJournalGPT.Forms
             _tradesDataTable.Columns.Add("Symbol", typeof(string));
             _tradesDataTable.Columns.Add("Date", typeof(DateTime));
             _tradesDataTable.Columns.Add("Trade Seq", typeof(int));
+            _tradesDataTable.Columns.Add("Side", typeof(string)); // SHORT/LONG from Tradersync
+            _tradesDataTable.Columns.Add("Entry Price", typeof(decimal)); // Entry price from Tradersync
+            _tradesDataTable.Columns.Add("Exit Price", typeof(decimal)); // Exit price from Tradersync
+            _tradesDataTable.Columns.Add("Profit/Loss", typeof(decimal)); // Profit/Loss from Tradersync
+            _tradesDataTable.Columns.Add("Profit/Loss %", typeof(decimal)); // Profit/Loss % from Tradersync
             _tradesDataTable.Columns.Add("Previous Close", typeof(decimal));
             _tradesDataTable.Columns.Add("High After Volume Surge", typeof(decimal));
             _tradesDataTable.Columns.Add("Low After Volume Surge", typeof(decimal));
@@ -542,24 +549,29 @@ namespace TradingJournalGPT.Forms
                     _tradesDataTable.Clear();
                     foreach (var trade in _temporaryTrades)
                     {
-                        _tradesDataTable.Rows.Add(
-                            trade.Symbol,
-                            trade.Date,
-                            trade.TradeSeq,
-                            trade.PreviousDayClose,
-                            trade.HighAfterVolumeSurge,
-                            trade.LowAfterVolumeSurge,
-                            trade.LowBeforeVolumeSurge,
-                            trade.GapPercentToHigh,
-                            trade.GapPercentHighToLow,
-                            trade.Volume / 1000000m,
-                            trade.TotalVolume,
-                            trade.Setup,
-                            trade.Float,
-                            trade.Catalyst,
-                            trade.Technicals,
-                            trade.ChartImagePath ?? "No Image"
-                        );
+                                            _tradesDataTable.Rows.Add(
+                        trade.Symbol,
+                        trade.Date,
+                        trade.TradeSeq,
+                        trade.TradeType, // Side (SHORT/LONG)
+                        trade.EntryPrice, // Entry Price
+                        trade.ExitPrice, // Exit Price
+                        trade.ProfitLoss, // Profit/Loss
+                        trade.ProfitLossPercent, // Profit/Loss %
+                        trade.PreviousDayClose,
+                        trade.HighAfterVolumeSurge,
+                        trade.LowAfterVolumeSurge,
+                        trade.LowBeforeVolumeSurge,
+                        trade.GapPercentToHigh,
+                        trade.GapPercentHighToLow,
+                        trade.Volume / 1000000m,
+                        trade.TotalVolume,
+                        trade.Setup,
+                        trade.Float,
+                        trade.Catalyst,
+                        trade.Technicals,
+                        trade.ChartImagePath ?? "No Image"
+                    );
                     }
                     return; // Exit early to avoid merging during undo/redo
                 }
@@ -609,6 +621,11 @@ namespace TradingJournalGPT.Forms
                         trade.Symbol,
                         trade.Date,
                         trade.TradeSeq,
+                        trade.TradeType, // Side (SHORT/LONG)
+                        trade.EntryPrice, // Entry Price
+                        trade.ExitPrice, // Exit Price
+                        trade.ProfitLoss, // Profit/Loss
+                        trade.ProfitLossPercent, // Profit/Loss %
                         trade.PreviousDayClose,
                         trade.HighAfterVolumeSurge,
                         trade.LowAfterVolumeSurge,
@@ -2761,6 +2778,58 @@ namespace TradingJournalGPT.Forms
         private void openFolderMenuItem_Click(object? sender, EventArgs e)
         {
             btnAnalyzeChartFolder_Click(sender, e);
+        }
+
+        private async void importTradersyncMenuItem_Click(object? sender, EventArgs e)
+        {
+            try
+            {
+                using (var openFileDialog = new OpenFileDialog())
+                {
+                    openFileDialog.Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*";
+                    openFileDialog.FilterIndex = 1;
+                    openFileDialog.Title = "Select Tradersync CSV file";
+
+                    if (openFileDialog.ShowDialog() == DialogResult.OK)
+                    {
+                        lblStatus.Text = "Importing Tradersync data...";
+                        progressBar.Value = 0;
+                        progressBar.Visible = true;
+
+                        var importedTrades = await _tradersyncImportService.ImportTradesAsync(openFileDialog.FileName);
+                        
+                        if (importedTrades.Count > 0)
+                        {
+                            // Add imported trades to temporary state
+                            foreach (var trade in importedTrades)
+                            {
+                                _temporaryTrades.Add(trade);
+                            }
+                            
+                            SetUnsavedChanges(true);
+                            LoadRecentTrades(); // Refresh the display
+                            
+                            MessageBox.Show($"Successfully imported {importedTrades.Count} trades from Tradersync!", 
+                                "Import Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        }
+                        else
+                        {
+                            MessageBox.Show("No trades were imported. Please check the CSV file format.", 
+                                "Import Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error importing Tradersync data: {ex.Message}", 
+                    "Import Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                progressBar.Visible = false;
+                lblStatus.Text = "Ready";
+            }
         }
 
         private void exportToCSVMenuItem_Click(object? sender, EventArgs e)

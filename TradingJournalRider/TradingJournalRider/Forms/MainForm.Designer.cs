@@ -57,6 +57,7 @@ namespace TradingJournalGPT.Forms
             this.newTradeMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.openImageMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.openFolderMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.importTradersyncMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripSeparator1 = new System.Windows.Forms.ToolStripSeparator();
             this.exportMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.exportToCSVMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -119,6 +120,7 @@ namespace TradingJournalGPT.Forms
             this.newTradeMenuItem,
             this.openImageMenuItem,
             this.openFolderMenuItem,
+            this.importTradersyncMenuItem,
             this.toolStripSeparator1,
             this.exportMenuItem,
             this.toolStripSeparator2,
@@ -146,6 +148,12 @@ namespace TradingJournalGPT.Forms
             this.openFolderMenuItem.ShortcutKeys = ((System.Windows.Forms.Keys)((System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.Shift | System.Windows.Forms.Keys.O)));
             this.openFolderMenuItem.Text = "Open &Folder...";
             this.openFolderMenuItem.Click += new System.EventHandler(this.openFolderMenuItem_Click);
+            // 
+            // importTradersyncMenuItem
+            // 
+            this.importTradersyncMenuItem.Name = "importTradersyncMenuItem";
+            this.importTradersyncMenuItem.Text = "Import &Tradersync...";
+            this.importTradersyncMenuItem.Click += new System.EventHandler(this.importTradersyncMenuItem_Click);
             // 
             // toolStripSeparator1
             // 
@@ -599,6 +607,7 @@ namespace TradingJournalGPT.Forms
         private System.Windows.Forms.ToolStripMenuItem newTradeMenuItem;
         private System.Windows.Forms.ToolStripMenuItem openImageMenuItem;
         private System.Windows.Forms.ToolStripMenuItem openFolderMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem importTradersyncMenuItem;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator1;
         private System.Windows.Forms.ToolStripMenuItem exportMenuItem;
         private System.Windows.Forms.ToolStripMenuItem exportToCSVMenuItem;
