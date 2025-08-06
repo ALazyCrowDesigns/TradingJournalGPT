@@ -19,7 +19,6 @@ namespace TradingJournalGPT.Forms
         private readonly TradingJournalService _tradingJournalService;
         private readonly LocalStorageService _localStorageService;
         private readonly FloatDataService _floatDataService;
-        private readonly TradersyncImportService _tradersyncImportService;
         private DataTable _tradesDataTable = new DataTable();
         private DataTable _setupsDataTable = new DataTable();
         private DataTable _technicalsDataTable = new DataTable();
@@ -48,7 +47,6 @@ namespace TradingJournalGPT.Forms
             _tradingJournalService = new TradingJournalService();
             _localStorageService = new LocalStorageService();
             _floatDataService = new FloatDataService();
-            _tradersyncImportService = new TradersyncImportService();
             
             // Load application icon
             try
@@ -90,7 +88,6 @@ namespace TradingJournalGPT.Forms
             _tradesDataTable.Columns.Add("Select", typeof(bool)); // Checkbox column for multi-selection
             _tradesDataTable.Columns.Add("Symbol", typeof(string));
             _tradesDataTable.Columns.Add("Date", typeof(DateTime));
-            _tradesDataTable.Columns.Add("Side", typeof(string)); // SHORT/LONG from Tradersync
             _tradesDataTable.Columns.Add("Trade Seq", typeof(int));
             _tradesDataTable.Columns.Add("Previous Close", typeof(decimal));
             _tradesDataTable.Columns.Add("High After Volume Surge", typeof(decimal));
@@ -546,10 +543,8 @@ namespace TradingJournalGPT.Forms
                     foreach (var trade in _temporaryTrades)
                     {
                         _tradesDataTable.Rows.Add(
-                            false, // Checkbox column - initially unchecked
                             trade.Symbol,
                             trade.Date,
-                            trade.Status, // SHORT/LONG from Tradersync
                             trade.TradeSeq,
                             trade.PreviousDayClose,
                             trade.HighAfterVolumeSurge,
@@ -613,7 +608,6 @@ namespace TradingJournalGPT.Forms
                         false, // Checkbox column - initially unchecked
                         trade.Symbol,
                         trade.Date,
-                        trade.Status, // SHORT/LONG from Tradersync
                         trade.TradeSeq,
                         trade.PreviousDayClose,
                         trade.HighAfterVolumeSurge,
@@ -2767,59 +2761,6 @@ namespace TradingJournalGPT.Forms
         private void openFolderMenuItem_Click(object? sender, EventArgs e)
         {
             btnAnalyzeChartFolder_Click(sender, e);
-        }
-
-        private async void importTradersyncMenuItem_Click(object? sender, EventArgs e)
-        {
-            try
-            {
-                using (var openFileDialog = new OpenFileDialog())
-                {
-                    openFileDialog.Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*";
-                    openFileDialog.FilterIndex = 1;
-                    openFileDialog.Title = "Select Tradersync CSV File";
-
-                    if (openFileDialog.ShowDialog() == DialogResult.OK)
-                    {
-                        Cursor = Cursors.WaitCursor;
-                        lblStatus.Text = "Importing Tradersync data...";
-                        Application.DoEvents();
-
-                        // Import the trades
-                        var importedTrades = await _tradersyncImportService.ImportTradesAsync(openFileDialog.FileName);
-                        
-                        // Add imported trades to existing trades
-                        foreach (var trade in importedTrades)
-                        {
-                            // Check if trade already exists (same symbol, date, and sequence)
-                            var existingTrade = _temporaryTrades.FirstOrDefault(t => 
-                                t.Symbol == trade.Symbol && 
-                                t.Date.Date == trade.Date.Date &&
-                                t.TradeSeq == trade.TradeSeq);
-                            
-                            if (existingTrade == null)
-                            {
-                                _temporaryTrades.Add(trade);
-                            }
-                        }
-
-                        // Refresh the display
-                        LoadRecentTrades();
-                        
-                        lblStatus.Text = $"Imported {importedTrades.Count} trades from Tradersync";
-                        MessageBox.Show($"Successfully imported {importedTrades.Count} trades from Tradersync!", "Import Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error importing Tradersync data: {ex.Message}", "Import Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                lblStatus.Text = "Import failed";
-            }
-            finally
-            {
-                Cursor = Cursors.Default;
-            }
         }
 
         private void exportToCSVMenuItem_Click(object? sender, EventArgs e)
