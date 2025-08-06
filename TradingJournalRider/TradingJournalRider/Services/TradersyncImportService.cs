@@ -208,6 +208,13 @@ namespace TradingJournalGPT.Services
 
         private TradeData ConvertToTradeData(TradersyncTrade tradersyncTrade)
         {
+            // Calculate percentage locally from entry/exit prices
+            var calculatedPercent = 0m;
+            if (tradersyncTrade.EntryPrice > 0)
+            {
+                calculatedPercent = ((tradersyncTrade.ExitPrice - tradersyncTrade.EntryPrice) / tradersyncTrade.EntryPrice) * 100;
+            }
+            
             return new TradeData
             {
                 Symbol = tradersyncTrade.Symbol,
@@ -217,9 +224,9 @@ namespace TradingJournalGPT.Services
                 EntryDate = tradersyncTrade.Date,
                 ExitDate = tradersyncTrade.Date,
                 ProfitLoss = tradersyncTrade.ProfitLoss,
-                ProfitLossPercent = tradersyncTrade.ProfitLossPercent,
+                ProfitLossPercent = calculatedPercent, // Calculate locally instead of importing
                 TradeType = tradersyncTrade.Side, // Use the Side (SHORT/LONG) as trade type
-                PositionSize = tradersyncTrade.Shares, // Set position size to shares // Added
+                PositionSize = tradersyncTrade.Shares, // Set position size to shares
                 Analysis = $"Imported from Tradersync - {tradersyncTrade.Status} ({tradersyncTrade.Shares} shares)",
                 RecordedDate = DateTime.Now,
                 TradeSeq = 1 // Default sequence for imported trades
@@ -290,14 +297,14 @@ namespace TradingJournalGPT.Services
             }
             
             // Calculate weighted average prices
-            var weightedAvgEntryPrice = totalShares > 0 ? totalEntryValue / totalShares : 0;
-            var weightedAvgExitPrice = totalShares > 0 ? totalExitValue / totalShares : 0;
+            var weightedAvgEntryPrice = totalShares > 0 ? Math.Round(totalEntryValue / totalShares, 2) : 0;
+            var weightedAvgExitPrice = totalShares > 0 ? Math.Round(totalExitValue / totalShares, 2) : 0;
             
             // Calculate correct weighted percentage
             var weightedProfitLossPercent = 0m;
             if (totalEntryValue > 0)
             {
-                weightedProfitLossPercent = ((totalExitValue - totalEntryValue) / totalEntryValue) * 100;
+                weightedProfitLossPercent = Math.Round(((totalExitValue - totalEntryValue) / totalEntryValue) * 100, 2);
             }
             
             // Create merged trade
