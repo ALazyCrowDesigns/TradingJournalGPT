@@ -18,6 +18,7 @@ namespace TradingJournalGPT.Services
         public decimal ProfitLoss { get; set; }
         public decimal ProfitLossPercent { get; set; }
         public string Side { get; set; } = string.Empty; // SHORT/LONG
+        public int Shares { get; set; } // Number of shares traded // Added
     }
 
     public class TradersyncImportService
@@ -106,6 +107,7 @@ namespace TradingJournalGPT.Services
             {
                 var status = parts[0].Trim().Replace("\"", ""); // Status (WIN/LOSS/BREAKEVEN)
                 var symbol = parts[1].Trim().Replace("\"", ""); // Symbol
+                var sharesStr = parts[2].Trim().Replace("\"", "").Replace(",", ""); // Size (shares)
                 var openDateStr = parts[3].Trim().Replace("\"", ""); // Open Date
                 var entryPriceStr = parts[9].Trim().Replace("$", "").Replace(",", ""); // Entry Price
                 var exitPriceStr = parts[10].Trim().Replace("$", "").Replace(",", ""); // Exit Price
@@ -113,7 +115,7 @@ namespace TradingJournalGPT.Services
                 var returnPercentStr = parts[12].Trim().Replace("%", "").Replace("\"", "").Replace(",", ""); // Return %
                 var side = parts.Length > 21 ? parts[21].Trim() : ""; // Side (SHORT/LONG)
 
-                Console.WriteLine($"Parsed values: Status={status}, Symbol={symbol}, Date={openDateStr}, Entry={entryPriceStr}, Exit={exitPriceStr}, Return$={returnDollarStr}, Return%={returnPercentStr}, Side={side}");
+                Console.WriteLine($"Parsed values: Status={status}, Symbol={symbol}, Shares={sharesStr}, Date={openDateStr}, Entry={entryPriceStr}, Exit={exitPriceStr}, Return$={returnDollarStr}, Return%={returnPercentStr}, Side={side}");
 
                 // Skip OPEN trades that don't have exit prices
                 if (status == "OPEN")
@@ -126,6 +128,13 @@ namespace TradingJournalGPT.Services
                 if (!DateTime.TryParseExact(openDateStr, "MMM dd, yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime tradeDate))
                 {
                     Console.WriteLine($"Could not parse date: {openDateStr}");
+                    return null;
+                }
+
+                // Parse shares
+                if (!int.TryParse(sharesStr, out int shares))
+                {
+                    Console.WriteLine($"Could not parse shares: {sharesStr}");
                     return null;
                 }
 
@@ -186,7 +195,8 @@ namespace TradingJournalGPT.Services
                     ExitPrice = exitPrice,
                     ProfitLoss = profitLoss,
                     ProfitLossPercent = profitLossPercent,
-                    Side = side
+                    Side = side,
+                    Shares = shares // Added
                 };
             }
             catch (Exception ex)
@@ -209,7 +219,8 @@ namespace TradingJournalGPT.Services
                 ProfitLoss = tradersyncTrade.ProfitLoss,
                 ProfitLossPercent = tradersyncTrade.ProfitLossPercent,
                 TradeType = tradersyncTrade.Side, // Use the Side (SHORT/LONG) as trade type
-                Analysis = $"Imported from Tradersync - {tradersyncTrade.Status}",
+                PositionSize = tradersyncTrade.Shares, // Set position size to shares // Added
+                Analysis = $"Imported from Tradersync - {tradersyncTrade.Status} ({tradersyncTrade.Shares} shares)",
                 RecordedDate = DateTime.Now,
                 TradeSeq = 1 // Default sequence for imported trades
             };
@@ -248,55 +259,61 @@ namespace TradingJournalGPT.Services
             if (trades.Count == 1) return trades[0];
             
             var firstTrade = trades[0];
+            var totalShares = 0;
             var totalEntryValue = 0m;
             var totalExitValue = 0m;
-            var totalShares = 0m;
             var totalProfitLoss = 0m;
             var totalProfitLossPercent = 0m;
-            var entryPrices = new List<decimal>();
-            var exitPrices = new List<decimal>();
+            var totalPositionSize = 0;
+            
+            Console.WriteLine($"Merging {trades.Count} trades for {firstTrade.Symbol} {firstTrade.TradeType} on {firstTrade.Date:MM/dd/yyyy}");
             
             foreach (var trade in trades)
             {
-                // Calculate weighted averages for prices
+                var shares = trade.PositionSize > 0 ? trade.PositionSize : 1; // Default to 1 if no position size
+                totalShares += shares;
+                totalPositionSize += shares;
+                
+                // Calculate weighted values
                 if (trade.EntryPrice > 0)
                 {
-                    entryPrices.Add(trade.EntryPrice);
-                    totalEntryValue += trade.EntryPrice;
+                    totalEntryValue += trade.EntryPrice * shares;
                 }
                 if (trade.ExitPrice > 0)
                 {
-                    exitPrices.Add(trade.ExitPrice);
-                    totalExitValue += trade.ExitPrice;
+                    totalExitValue += trade.ExitPrice * shares;
                 }
                 
+                // Sum profit/loss (already weighted by shares in the original data)
                 totalProfitLoss += trade.ProfitLoss;
                 totalProfitLossPercent += trade.ProfitLossPercent;
-                totalShares += 1; // Assuming each trade represents 1 share/contract
+                
+                Console.WriteLine($"  Trade: {shares} shares @ {trade.EntryPrice:F2} -> {trade.ExitPrice:F2}, P/L: {trade.ProfitLoss:F2}");
             }
             
             // Calculate weighted average prices
-            var avgEntryPrice = entryPrices.Count > 0 ? totalEntryValue / entryPrices.Count : 0;
-            var avgExitPrice = exitPrices.Count > 0 ? totalExitValue / exitPrices.Count : 0;
+            var weightedAvgEntryPrice = totalShares > 0 ? totalEntryValue / totalShares : 0;
+            var weightedAvgExitPrice = totalShares > 0 ? totalExitValue / totalShares : 0;
             
             // Create merged trade
             var mergedTrade = new TradeData
             {
                 Symbol = firstTrade.Symbol,
                 Date = firstTrade.Date,
-                EntryPrice = avgEntryPrice,
-                ExitPrice = avgExitPrice,
+                EntryPrice = weightedAvgEntryPrice,
+                ExitPrice = weightedAvgExitPrice,
                 EntryDate = firstTrade.EntryDate,
                 ExitDate = firstTrade.ExitDate,
                 ProfitLoss = totalProfitLoss,
                 ProfitLossPercent = totalProfitLossPercent,
                 TradeType = firstTrade.TradeType,
-                Analysis = $"Merged {trades.Count} Tradersync trades - {firstTrade.Analysis}",
+                PositionSize = totalPositionSize, // Total shares across all trades
+                Analysis = $"Merged {trades.Count} Tradersync trades ({totalPositionSize} total shares) - {firstTrade.Analysis}",
                 RecordedDate = DateTime.Now,
                 TradeSeq = 1
             };
             
-            Console.WriteLine($"Merged trade: {mergedTrade.Symbol} {mergedTrade.TradeType} - Avg Entry: {avgEntryPrice:F2}, Avg Exit: {avgExitPrice:F2}, Total P/L: {totalProfitLoss:F2}");
+            Console.WriteLine($"Merged result: {totalPositionSize} total shares @ {weightedAvgEntryPrice:F2} -> {weightedAvgExitPrice:F2}, Total P/L: {totalProfitLoss:F2}");
             
             return mergedTrade;
         }
