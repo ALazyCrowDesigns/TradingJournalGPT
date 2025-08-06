@@ -29,17 +29,27 @@ namespace TradingJournalGPT.Services
             try
             {
                 var lines = await File.ReadAllLinesAsync(filePath);
+                Console.WriteLine($"Total lines in file: {lines.Length}");
                 
                 // Skip header line
                 for (int i = 1; i < lines.Length; i++)
                 {
-                    var trade = ParseTradeLine(lines[i].Split(','));
+                    Console.WriteLine($"Processing line {i}: {lines[i].Substring(0, Math.Min(100, lines[i].Length))}");
+                    var parts = ParseCsvLine(lines[i]);
+                    var trade = ParseTradeLine(parts);
                     if (trade != null)
                     {
+                        Console.WriteLine($"Successfully parsed trade: {trade.Symbol} - {trade.Side} - {trade.EntryPrice} -> {trade.ExitPrice}");
                         var tradeData = ConvertToTradeData(trade);
                         trades.Add(tradeData);
                     }
+                    else
+                    {
+                        Console.WriteLine($"Failed to parse line {i}");
+                    }
                 }
+                
+                Console.WriteLine($"Total trades imported: {trades.Count}");
             }
             catch (Exception ex)
             {
@@ -49,11 +59,40 @@ namespace TradingJournalGPT.Services
             return trades;
         }
 
+        private string[] ParseCsvLine(string line)
+        {
+            var result = new List<string>();
+            var current = "";
+            var inQuotes = false;
+            
+            for (int i = 0; i < line.Length; i++)
+            {
+                char c = line[i];
+                
+                if (c == '"')
+                {
+                    inQuotes = !inQuotes;
+                }
+                else if (c == ',' && !inQuotes)
+                {
+                    result.Add(current.Trim());
+                    current = "";
+                }
+                else
+                {
+                    current += c;
+                }
+            }
+            
+            result.Add(current.Trim());
+            return result.ToArray();
+        }
+
         private TradersyncTrade? ParseTradeLine(string[] parts)
         {
             if (parts.Length < 13)
             {
-                Console.WriteLine($"Invalid line format: {string.Join(",", parts)}");
+                Console.WriteLine($"Invalid line format - not enough columns: {parts.Length} columns, need at least 13");
                 return null;
             }
 
@@ -68,6 +107,15 @@ namespace TradingJournalGPT.Services
                 var returnPercentStr = parts[12].Trim().Replace("%", "").Replace("\"", "").Replace(",", ""); // Return %
                 var side = parts.Length > 21 ? parts[21].Trim() : ""; // Side (SHORT/LONG)
 
+                Console.WriteLine($"Parsed values: Status={status}, Symbol={symbol}, Date={openDateStr}, Entry={entryPriceStr}, Exit={exitPriceStr}, Return$={returnDollarStr}, Return%={returnPercentStr}, Side={side}");
+
+                // Skip OPEN trades that don't have exit prices
+                if (status == "OPEN")
+                {
+                    Console.WriteLine($"Skipping OPEN trade for {symbol}");
+                    return null;
+                }
+
                 // Parse date
                 if (!DateTime.TryParseExact(openDateStr, "MMM dd, yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime tradeDate))
                 {
@@ -75,35 +123,53 @@ namespace TradingJournalGPT.Services
                     return null;
                 }
 
-                // Parse prices
+                // Parse prices - handle empty exit prices
                 if (!decimal.TryParse(entryPriceStr, out decimal entryPrice))
                 {
                     Console.WriteLine($"Could not parse entry price: {entryPriceStr}");
                     return null;
                 }
 
-                if (!decimal.TryParse(exitPriceStr, out decimal exitPrice))
+                // Handle empty exit prices (some trades might not have closed yet)
+                decimal exitPrice = 0;
+                if (!string.IsNullOrEmpty(exitPriceStr) && decimal.TryParse(exitPriceStr, out exitPrice))
                 {
-                    Console.WriteLine($"Could not parse exit price: {exitPriceStr}");
-                    return null;
+                    // Exit price parsed successfully
+                }
+                else
+                {
+                    Console.WriteLine($"Could not parse exit price: {exitPriceStr}, using 0");
+                    exitPrice = 0;
                 }
 
-                // Parse profit/loss
-                if (!decimal.TryParse(returnDollarStr, out decimal profitLoss))
+                // Parse profit/loss - handle empty values
+                decimal profitLoss = 0;
+                if (!string.IsNullOrEmpty(returnDollarStr) && decimal.TryParse(returnDollarStr, out profitLoss))
                 {
-                    Console.WriteLine($"Could not parse profit/loss: {returnDollarStr}");
-                    return null;
+                    // Profit/loss parsed successfully
+                }
+                else
+                {
+                    Console.WriteLine($"Could not parse profit/loss: {returnDollarStr}, using 0");
+                    profitLoss = 0;
                 }
 
-                // Parse profit/loss percentage
-                if (!decimal.TryParse(returnPercentStr, out decimal profitLossPercent))
+                // Parse profit/loss percentage - handle empty values
+                decimal profitLossPercent = 0;
+                if (!string.IsNullOrEmpty(returnPercentStr) && decimal.TryParse(returnPercentStr, out profitLossPercent))
                 {
-                    Console.WriteLine($"Could not parse profit/loss percentage: {returnPercentStr}");
-                    return null;
+                    // Profit/loss percentage parsed successfully
+                }
+                else
+                {
+                    Console.WriteLine($"Could not parse profit/loss percentage: {returnPercentStr}, using 0");
+                    profitLossPercent = 0;
                 }
 
                 // Use the Side column if available, otherwise use Status
                 var displayStatus = !string.IsNullOrEmpty(side) ? side : status;
+
+                Console.WriteLine($"Successfully parsed all values for {symbol}");
 
                 return new TradersyncTrade
                 {
