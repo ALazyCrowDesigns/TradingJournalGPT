@@ -59,7 +59,8 @@ namespace TradingJournalGPT.Services
 
             try
             {
-                var symbol = parts[0].Trim().Replace("\"", "");
+                var status = parts[0].Trim().Replace("\"", ""); // Status (WIN/LOSS/BREAKEVEN)
+                var symbol = parts[1].Trim().Replace("\"", ""); // Symbol
                 var openDateStr = parts[3].Trim().Replace("\"", ""); // Open Date
                 var entryPriceStr = parts[9].Trim().Replace("$", "").Replace(",", ""); // Entry Price
                 var exitPriceStr = parts[10].Trim().Replace("$", "").Replace(",", ""); // Exit Price
@@ -101,15 +102,14 @@ namespace TradingJournalGPT.Services
                     return null;
                 }
 
-                // Determine status based on profit/loss
-                string winLossStatus = profitLoss > 0 ? "WIN" : profitLoss < 0 ? "LOSS" : "BREAKEVEN";
-                var displayStatus = !string.IsNullOrEmpty(side) ? side : winLossStatus;
+                // Use the Side column if available, otherwise use Status
+                var displayStatus = !string.IsNullOrEmpty(side) ? side : status;
 
                 return new TradersyncTrade
                 {
                     Symbol = symbol,
                     Date = tradeDate,
-                    Status = displayStatus,
+                    Status = status, // Keep the original status (WIN/LOSS/BREAKEVEN)
                     EntryPrice = entryPrice,
                     ExitPrice = exitPrice,
                     ProfitLoss = profitLoss,
@@ -136,7 +136,7 @@ namespace TradingJournalGPT.Services
                 ExitDate = tradersyncTrade.Date,
                 ProfitLoss = tradersyncTrade.ProfitLoss,
                 ProfitLossPercent = tradersyncTrade.ProfitLossPercent,
-                TradeType = tradersyncTrade.Status, // Use the status as trade type
+                TradeType = tradersyncTrade.Side, // Use the Side (SHORT/LONG) as trade type
                 Analysis = $"Imported from Tradersync - {tradersyncTrade.Status}",
                 RecordedDate = DateTime.Now,
                 TradeSeq = 1 // Default sequence for imported trades
