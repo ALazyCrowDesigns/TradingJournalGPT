@@ -16,9 +16,9 @@ namespace TradingJournalGPT.Services
         public decimal EntryPrice { get; set; }
         public decimal ExitPrice { get; set; }
         public decimal ProfitLoss { get; set; }
-        public decimal ProfitLossPercent { get; set; }
+        public decimal ProfitLossPercent { get; set; } // Import from CSV
         public string Side { get; set; } = string.Empty; // SHORT/LONG
-        public int Shares { get; set; } // Number of shares traded // Added
+        public int Shares { get; set; } // Number of shares traded
     }
 
     public class TradersyncImportService
@@ -181,9 +181,6 @@ namespace TradingJournalGPT.Services
                     profitLossPercent = 0;
                 }
 
-                // Use the Side column if available, otherwise use Status
-                var displayStatus = !string.IsNullOrEmpty(side) ? side : status;
-
                 Console.WriteLine($"Successfully parsed all values for {symbol}");
 
                 return new TradersyncTrade
@@ -194,9 +191,9 @@ namespace TradingJournalGPT.Services
                     EntryPrice = entryPrice,
                     ExitPrice = exitPrice,
                     ProfitLoss = profitLoss,
-                    ProfitLossPercent = profitLossPercent,
+                    ProfitLossPercent = profitLossPercent, // Import from CSV
                     Side = side,
-                    Shares = shares // Added
+                    Shares = shares
                 };
             }
             catch (Exception ex)
@@ -208,13 +205,6 @@ namespace TradingJournalGPT.Services
 
         private TradeData ConvertToTradeData(TradersyncTrade tradersyncTrade)
         {
-            // Calculate percentage locally from entry/exit prices
-            var calculatedPercent = 0m;
-            if (tradersyncTrade.EntryPrice > 0)
-            {
-                calculatedPercent = ((tradersyncTrade.ExitPrice - tradersyncTrade.EntryPrice) / tradersyncTrade.EntryPrice) * 100;
-            }
-            
             return new TradeData
             {
                 Symbol = tradersyncTrade.Symbol,
@@ -224,7 +214,7 @@ namespace TradingJournalGPT.Services
                 EntryDate = tradersyncTrade.Date,
                 ExitDate = tradersyncTrade.Date,
                 ProfitLoss = tradersyncTrade.ProfitLoss,
-                ProfitLossPercent = calculatedPercent, // Calculate locally instead of importing
+                ProfitLossPercent = tradersyncTrade.ProfitLossPercent, // Use imported percentage from CSV
                 TradeType = tradersyncTrade.Side, // Use the Side (SHORT/LONG) as trade type
                 PositionSize = tradersyncTrade.Shares, // Set position size to shares
                 Analysis = $"Imported from Tradersync - {tradersyncTrade.Status} ({tradersyncTrade.Shares} shares)",
@@ -266,18 +256,17 @@ namespace TradingJournalGPT.Services
             if (trades.Count == 1) return trades[0];
             
             var firstTrade = trades[0];
-            var totalShares = 0;
             var totalEntryValue = 0m;
             var totalExitValue = 0m;
             var totalProfitLoss = 0m;
             var totalPositionSize = 0;
+            var totalPercentValue = 0m; // For weighted percentage calculation
             
             Console.WriteLine($"Merging {trades.Count} trades for {firstTrade.Symbol} {firstTrade.TradeType} on {firstTrade.Date:MM/dd/yyyy}");
             
             foreach (var trade in trades)
             {
                 var shares = trade.PositionSize > 0 ? trade.PositionSize : 1; // Default to 1 if no position size
-                totalShares += shares;
                 totalPositionSize += shares;
                 
                 // Calculate weighted values
@@ -290,22 +279,21 @@ namespace TradingJournalGPT.Services
                     totalExitValue += trade.ExitPrice * shares;
                 }
                 
+                // Calculate weighted percentage (percentage * shares)
+                totalPercentValue += trade.ProfitLossPercent * shares;
+                
                 // Sum profit/loss (already weighted by shares in the original data)
                 totalProfitLoss += trade.ProfitLoss;
                 
-                Console.WriteLine($"  Trade: {shares} shares @ {trade.EntryPrice:F2} -> {trade.ExitPrice:F2}, P/L: {trade.ProfitLoss:F2}");
+                Console.WriteLine($"  Trade: {shares} shares @ {trade.EntryPrice:F2} -> {trade.ExitPrice:F2}, P/L: {trade.ProfitLoss:F2}, P/L%: {trade.ProfitLossPercent:F2}%");
             }
             
             // Calculate weighted average prices
-            var weightedAvgEntryPrice = totalShares > 0 ? Math.Round(totalEntryValue / totalShares, 2) : 0;
-            var weightedAvgExitPrice = totalShares > 0 ? Math.Round(totalExitValue / totalShares, 2) : 0;
+            var weightedAvgEntryPrice = totalPositionSize > 0 ? Math.Round(totalEntryValue / totalPositionSize, 2) : 0;
+            var weightedAvgExitPrice = totalPositionSize > 0 ? Math.Round(totalExitValue / totalPositionSize, 2) : 0;
             
-            // Calculate correct weighted percentage
-            var weightedProfitLossPercent = 0m;
-            if (totalEntryValue > 0)
-            {
-                weightedProfitLossPercent = Math.Round(((totalExitValue - totalEntryValue) / totalEntryValue) * 100, 2);
-            }
+            // Calculate weighted average percentage
+            var weightedAvgPercent = totalPositionSize > 0 ? Math.Round(totalPercentValue / totalPositionSize, 2) : 0;
             
             // Create merged trade
             var mergedTrade = new TradeData
@@ -317,7 +305,7 @@ namespace TradingJournalGPT.Services
                 EntryDate = firstTrade.EntryDate,
                 ExitDate = firstTrade.ExitDate,
                 ProfitLoss = totalProfitLoss,
-                ProfitLossPercent = weightedProfitLossPercent, // Fixed: Calculate weighted percentage
+                ProfitLossPercent = weightedAvgPercent, // Weighted average percentage
                 TradeType = firstTrade.TradeType,
                 PositionSize = totalPositionSize, // Total shares across all trades
                 Analysis = $"Merged {trades.Count} Tradersync trades ({totalPositionSize} total shares) - {firstTrade.Analysis}",
@@ -325,7 +313,7 @@ namespace TradingJournalGPT.Services
                 TradeSeq = 1
             };
             
-            Console.WriteLine($"Merged result: {totalPositionSize} total shares @ {weightedAvgEntryPrice:F2} -> {weightedAvgExitPrice:F2}, Total P/L: {totalProfitLoss:F2}, P/L %: {weightedProfitLossPercent:F2}%");
+            Console.WriteLine($"Merged result: {totalPositionSize} total shares @ {weightedAvgEntryPrice:F2} -> {weightedAvgExitPrice:F2}, Total P/L: {totalProfitLoss:F2}, Avg P/L %: {weightedAvgPercent:F2}%");
             
             return mergedTrade;
         }
